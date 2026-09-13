@@ -1,0 +1,194 @@
+body {
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    background-color: #0b0b0b;
+    font-family: Arial, sans-serif;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+#loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #0b0b0b;
+    z-index: 9999;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transition: opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1), visibility 0.8s;
+}
+
+.loader-content {
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+}
+
+.spinner {
+    width: clamp(36px, 10vw, 50px);
+    height: clamp(36px, 10vw, 50px);
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top: 3px solid #ffffff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: #a0a0a0;
+    font-family: 'Space Grotesk', Arial, sans-serif;
+    font-size: clamp(12px, 3.5vw, 15px);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 0 16px;
+}
+
+#loading-percent {
+    color: #ffffff;
+    font-weight: 700;
+}
+
+canvas {
+    display: block;
+}
+
+#about-me-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(0.95);
+    opacity: 0;
+    color: #1a1a1a;
+    padding: 28px 20px 24px;
+    border-radius: 22px;
+    display: none;
+    z-index: 1000;
+    text-align: center;
+    font-family: Arial, sans-serif;
+    direction: ltr;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.55), 0 0 40px rgba(0, 198, 255, 0.12);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    width: 85%;
+    max-width: 320px;
+    max-height: 85vh;
+    overflow-y: auto;
+    animation: fadeInModal 0.35s forwards cubic-bezier(0.16, 1, 0.3, 1);
+    background: rgba(255, 255, 255, 0.85);
+}
+
+@keyframes fadeInModal {
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+#about-me-panel .name {
+    margin: 6px 0 2px 0;
+    font-family: 'Space Grotesk', Arial, sans-serif;
+    font-size: clamp(17px, 4.5vw, 20px);
+    font-weight: 700;
+    color: #111111;
+}
+
+#about-me-panel .role {
+    margin: 0 0 16px 0;
+    font-size: 12px;
+    color: #4a4a4a;
+}
+
+#about-me-panel .panel-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.12);
+    margin: 0 0 16px 0;
+}
+
+#about-me-panel .bio {
+    margin: 0 0 18px 0;
+    font-size: 13px;
+    color: #222222;
+    line-height: 1.6;
+}
+
+#about-me-panel .contact-title {
+    margin: 0 0 14px 0;
+    font-family: 'Space Grotesk', Arial, sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: #111111;
+}
+
+#about-me-panel .social-links {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+#about-me-panel .social-btn {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    text-decoration: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    color: #fff;
+    background: rgba(0, 0, 0, 0.07);
+    border: 1px solid rgba(0, 0, 0, 0.14);
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), background 0.25s ease, box-shadow 0.25s ease;
+}
+
+#about-me-panel .social-btn:hover {
+    transform: translateY(-3px);
+}
+
+#about-me-panel .btn-whatsapp:hover { background: #25d366; box-shadow: 0 8px 20px rgba(37, 211, 102, 0.4); }
+#about-me-panel .btn-instagram:hover { background: #dc2743; box-shadow: 0 8px 20px rgba(220, 39, 67, 0.4); }
+#about-me-panel .btn-linkedin:hover { background: #0077b5; box-shadow: 0 8px 20px rgba(0, 119, 181, 0.4); }
+#about-me-panel .btn-youtube:hover { background: #ff0000; box-shadow: 0 8px 20px rgba(255, 0, 0, 0.4); }
+#about-me-panel .btn-telegram:hover { background: #229ed9; box-shadow: 0 8px 20px rgba(34, 158, 217, 0.4); }
+
+/* Small phones (iPhone SE, older Androids, etc.) */
+@media (max-width: 380px) {
+    #about-me-panel {
+        padding: 22px 16px 18px;
+        border-radius: 18px;
+    }
+
+    #about-me-panel .social-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 14px;
+    }
+}
+
+/* Landscape phones: panel and loading text sit too close to the top/bottom edges otherwise */
+@media (max-height: 420px) and (orientation: landscape) {
+    #about-me-panel {
+        max-height: 90vh;
+        padding: 16px 18px 14px;
+    }
+
+    #about-me-panel .panel-divider {
+        margin-bottom: 10px;
+    }
+
+    #about-me-panel .bio {
+        margin-bottom: 10px;
+    }
+}
