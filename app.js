@@ -249,15 +249,12 @@ function computeOutwardDirection(art, viewpoint) {
 }
 
 function applyCustomImage(art, url) {
-    // Tag each load request so a late-arriving older request can't clobber
-    // a newer one if the user flips between artworks quickly.
     const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
 
     textureLoader.load(
         url,
         (texture) => {
             if (art.imageRequestId !== requestId) {
-                // A newer load for this artwork started after this one — discard.
                 texture.dispose();
                 return;
             }
@@ -361,8 +358,13 @@ loader.load(
             art.baseAzimuth = Math.atan2(offset.x, offset.z);
         });
 
-        artworks.forEach((art) => {
-            if (art.config.image) applyCustomImage(art, art.config.image);
+        // بارگذاری پله‌ای تصاویر (هر ۲۰۰ میلی‌ثانیه یک تصویر) جهت جلوگیری از کرش سافاری روی آیفون
+        artworks.forEach((art, index) => {
+            if (art.config.image) {
+                setTimeout(() => {
+                    applyCustomImage(art, art.config.image);
+                }, index * 200);
+            }
         });
     },
     undefined,
@@ -490,9 +492,6 @@ window.addEventListener('wheel', (e) => {
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-// Distance (px) the finger needs to travel to advance one artwork.
-// Tracking is continuous via touchmove instead of only comparing
-// start/end points, so the gesture feels live instead of laggy.
 const TOUCH_STEP_DISTANCE = 60;
 let touchLastY = null;
 let touchAccum = 0;
@@ -506,18 +505,18 @@ window.addEventListener('touchmove', (e) => {
     if (touchLastY === null) return;
 
     const currentY = e.touches[0].clientY;
-    const delta = touchLastY - currentY; // swipe up (finger moves up) -> positive -> go forward
+    const delta = touchLastY - currentY;
     touchLastY = currentY;
 
-    if (isAnimating) return; // camera is mid fly-to; ignore extra input until it settles
+    if (isAnimating) return;
 
     touchAccum += delta;
     while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
         const direction = touchAccum > 0 ? 1 : -1;
         stepIndex(direction);
-        touchAccum -= direction * TOUCH_STEP_DISTANCE;
+        touchAccum -= direction *TOUCH_STEP_DISTANCE;
         if (isAnimating) {
-            touchAccum = 0; // an animation just started; wait for it before stepping again
+            touchAccum = 0;
             break;
         }
     }
