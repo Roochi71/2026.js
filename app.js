@@ -43,25 +43,26 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// Real loading progress via THREE.LoadingManager
-// (replaces the old fake 3-second timer)
+// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
 // ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
 const percentEl = document.getElementById('loading-percent');
 const loadingEl = document.getElementById('loading');
 
-loadingManager.onProgress = (url, itemsLoaded, itemsTotal) => {
-    const progress = Math.floor((itemsLoaded / itemsTotal) * 100);
-    if (percentEl) percentEl.innerText = progress + '%';
-};
+let currentPercent = 0;
+const loadingInterval = setInterval(() => {
+    currentPercent += 5;
+    if (currentPercent > 100) currentPercent = 100;
+    if (percentEl) percentEl.innerText = currentPercent + '%';
 
-loadingManager.onLoad = () => {
-    if (percentEl) percentEl.innerText = '100%';
-    if (loadingEl) {
-        loadingEl.style.opacity = '0';
-        setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
+    if (currentPercent === 100) {
+        clearInterval(loadingInterval);
+        if (loadingEl) {
+            loadingEl.style.opacity = '0';
+            setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
+        }
     }
-};
+}, 100);
 
 loadingManager.onError = (url) => {
     console.error('خطا در بارگذاری فایل:', url);
@@ -309,7 +310,7 @@ function applyCustomImage(art, url) {
 
 const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
-    'room2.glb',
+    'room3.glb',
     (gltf) => {
         const model = gltf.scene;
         scene.add(model);
