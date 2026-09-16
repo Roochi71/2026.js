@@ -98,7 +98,7 @@ const ARTWORK_CONFIG = [
     },
     {
         name: "Object003_eddie manuel bake_0",
-        image: '2.jpg',
+        image: './2.jpg',
         size: { width: 0.69, height: 0.55, dist: 0.005, offsetX: 0, offsetY: -0.02, degX: -1, degY: 7, degZ: 0 },
         override: { pos: [13.30, 1.60, 1.50], target: [13.75, 1.60, 2.00] }
     },
