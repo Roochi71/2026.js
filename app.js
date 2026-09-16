@@ -361,8 +361,13 @@ loader.load(
             art.baseAzimuth = Math.atan2(offset.x, offset.z);
         });
 
-        artworks.forEach((art) => {
-            if (art.config.image) applyCustomImage(art, art.config.image);
+        // بارگذاری پله‌ای تصاویر با فواصل ۱۵۰ میلی‌ثانیه‌ای برای جلوگیری از کرش آیفون
+        artworks.forEach((art, index) => {
+            if (art.config.image) {
+                setTimeout(() => {
+                    applyCustomImage(art, art.config.image);
+                }, index * 150);
+            }
         });
     },
     undefined,
@@ -392,7 +397,8 @@ function updateAboutPanel(index) {
     const aboutPanel = document.getElementById('about-me-panel');
     if (!aboutPanel) return;
 
-    if (index === artworks.length) {
+    // محافظ امنیتی برای اینکه اگر به هر دلیلی artworks لود نشد، پنل کانتاکت الکی باز نشود
+    if (artworks.length > 0 && index === artworks.length) {
         aboutPanel.innerHTML = `
             <h3 class="name">Your Company Name</h3>
             <p class="role">Photographer</p>
