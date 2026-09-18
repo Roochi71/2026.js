@@ -3,8 +3,6 @@ scene.background = new THREE.Color(0x0b0b0b);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// On narrow/portrait screens (most phones) a 60° FOV crops the room too
-// tightly. Widen it automatically so more of the scene stays in frame.
 function updateCameraForViewport() {
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
@@ -13,10 +11,12 @@ function updateCameraForViewport() {
 }
 updateCameraForViewport();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+// بهینه‌سازی رندر و کاهش فشار روی کارت گرافیک موبایل
+const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.outputEncoding = THREE.sRGBEncoding;
+// برای موبایل پیکس‌ریشیو روی ۱ قفل می‌شود تا فریم‌ریت افت نکند
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
 document.body.appendChild(renderer.domElement);
@@ -42,9 +42,6 @@ scene.add(dirLight);
 let mixer;
 const clock = new THREE.Clock();
 
-// ---------------------------------------------------------------------------
-// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
-// ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
 const percentEl = document.getElementById('loading-percent');
 const loadingEl = document.getElementById('loading');
@@ -83,12 +80,6 @@ const aboutView = {
     target: [-5.59, 1.54, -1.33]
 };
 
-// ---------------------------------------------------------------------------
-// Unified per-artwork configuration
-// (replaces EXACT_ARTWORK_NAMES + CUSTOM_IMAGES + CUSTOM_IMAGE_SIZE + MANUAL_OVERRIDES)
-// Each artwork now lives in exactly one place, keyed once — no repeated name
-// strings across four separate objects.
-// ---------------------------------------------------------------------------
 const ARTWORK_CONFIG = [
     {
         name: "jake and london eye_london eye manual bake_0",
@@ -204,7 +195,6 @@ function normalizeName(str) {
 }
 
 const NORMALIZED_TARGETS = ARTWORK_CONFIG.map((a) => normalizeName(a.name));
-
 const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
 
 let artworks = [];
@@ -248,28 +238,18 @@ function computeOutwardDirection(art, viewpoint) {
     return dir.normalize();
 }
 
+// سیستم لود تنبل (Lazy Loading) برای جلوگیری از کرش کردن موبایل
 function applyCustomImage(art, url) {
-    // Tag each load request so a late-arriving older request can't clobber
-    // a newer one if the user flips between artworks quickly.
-    const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
+    if (art.imageMesh || art.isLoadingImage) return;
+    art.isLoadingImage = true;
 
     textureLoader.load(
         url,
         (texture) => {
-            if (art.imageRequestId !== requestId) {
-                // A newer load for this artwork started after this one — discard.
-                texture.dispose();
-                return;
-            }
-
-            texture.encoding = THREE.sRGBEncoding;
-
-            if (art.imageMesh) {
-                scene.remove(art.imageMesh);
-                art.imageMesh.geometry.dispose();
-                art.imageMesh.material.map?.dispose();
-                art.imageMesh.material.dispose();
-            }
+            texture.colorSpace = THREE.SRGBColorSpace;
+            // فشرده‌سازی ابعاد تکسچر برای سبکی رم موبایل
+            texture.generateMipmaps = false;
+            texture.minFilter = THREE.LinearFilter;
 
             const outward = art.outwardDir;
             const manual = art.config.size || {};
@@ -302,9 +282,13 @@ function applyCustomImage(art, url) {
 
             scene.add(planeMesh);
             art.imageMesh = planeMesh;
+            art.isLoadingImage = false;
         },
         undefined,
-        (err) => console.error(`خطا در بارگذاری تصویر ${url}:`, err)
+        (err) => {
+            art.isLoadingImage = false;
+            console.error(`خطا در بارگذاری تصویر ${url}:`, err);
+        }
     );
 }
 
@@ -361,9 +345,10 @@ loader.load(
             art.baseAzimuth = Math.atan2(offset.x, offset.z);
         });
 
-        artworks.forEach((art) => {
-            if (art.config.image) applyCustomImage(art, art.config.image);
-        });
+        // لود کردن اولین تصویر به صورت پیش‌فرض در ابتدا
+        if (artworks.length > 0 && artworks[0].config.image) {
+            applyCustomImage(artworks[0], artworks[0].config.image);
+        }
     },
     undefined,
     (error) => {
@@ -397,25 +382,12 @@ function updateAboutPanel(index) {
             <h3 class="name">Your Company Name</h3>
             <p class="role">Photographer</p>
             <div class="panel-divider"></div>
-            <p class="bio">I'm a passionate photographer with over [X] years of experience capturing life's most precious moments. My work specializes in [wedding / portrait / nature] photography, where every shot tells a unique story.</p>
+            <p class="bio">I'm a passionate photographer with over [X] years of experience capturing life's most precious moments.</p>
             <div class="panel-divider"></div>
             <h4 class="contact-title">Contact me</h4>
             <div class="social-links">
-                <a href="https://wa.me/YOUR_PHONE" target="_blank" class="social-btn btn-whatsapp" title="WhatsApp">
-                    <i class="fa-brands fa-whatsapp"></i>
-                </a>
-                <a href="https://instagram.com/YOUR_ID" target="_blank" class="social-btn btn-instagram" title="Instagram">
-                    <i class="fa-brands fa-instagram"></i>
-                </a>
-                <a href="https://linkedin.com/in/YOUR_ID" target="_blank" class="social-btn btn-linkedin" title="LinkedIn">
-                    <i class="fa-brands fa-linkedin"></i>
-                </a>
-                <a href="https://youtube.com/@YOUR_ID" target="_blank" class="social-btn btn-youtube" title="YouTube">
-                    <i class="fa-brands fa-youtube"></i>
-                </a>
-                <a href="https://t.me/YOUR_ID" target="_blank" class="social-btn btn-telegram" title="Telegram">
-                    <i class="fa-brands fa-telegram"></i>
-                </a>
+                <a href="https://wa.me/YOUR_PHONE" target="_blank" class="social-btn btn-whatsapp" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                <a href="https://instagram.com/YOUR_ID" target="_blank" class="social-btn btn-instagram" title="Instagram"><i class="fa-brands fa-instagram"></i></a>
             </div>
         `;
         aboutPanel.style.display = 'block';
@@ -440,6 +412,10 @@ function goToIndex(index) {
         flyTo(aboutView);
     } else {
         const art = artworks[index];
+        // لود شدن تصویر به محض رسیدن دوربین به تابلو (جلوگیری از لود همزمان همگی)
+        if (art.config.image) {
+            applyCustomImage(art, art.config.image);
+        }
         flyTo(art.viewpoint, () => {
             controls.enableRotate = true;
             controls.minAzimuthAngle = art.baseAzimuth - ARTWORK_AZIMUTH_RANGE;
@@ -490,9 +466,6 @@ window.addEventListener('wheel', (e) => {
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-// Distance (px) the finger needs to travel to advance one artwork.
-// Tracking is continuous via touchmove instead of only comparing
-// start/end points, so the gesture feels live instead of laggy.
 const TOUCH_STEP_DISTANCE = 60;
 let touchLastY = null;
 let touchAccum = 0;
@@ -506,10 +479,10 @@ window.addEventListener('touchmove', (e) => {
     if (touchLastY === null) return;
 
     const currentY = e.touches[0].clientY;
-    const delta = touchLastY - currentY; // swipe up (finger moves up) -> positive -> go forward
+    const delta = touchLastY - currentY;
     touchLastY = currentY;
 
-    if (isAnimating) return; // camera is mid fly-to; ignore extra input until it settles
+    if (isAnimating) return;
 
     touchAccum += delta;
     while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
@@ -517,7 +490,7 @@ window.addEventListener('touchmove', (e) => {
         stepIndex(direction);
         touchAccum -= direction * TOUCH_STEP_DISTANCE;
         if (isAnimating) {
-            touchAccum = 0; // an animation just started; wait for it before stepping again
+            touchAccum = 0;
             break;
         }
     }
