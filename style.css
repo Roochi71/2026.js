@@ -162,3 +162,33 @@ canvas {
 #about-me-panel .btn-linkedin:hover { background: #0077b5; box-shadow: 0 8px 20px rgba(0, 119, 181, 0.4); }
 #about-me-panel .btn-youtube:hover { background: #ff0000; box-shadow: 0 8px 20px rgba(255, 0, 0, 0.4); }
 #about-me-panel .btn-telegram:hover { background: #229ed9; box-shadow: 0 8px 20px rgba(34, 158, 217, 0.4); }
+
+/* Small phones (iPhone SE, older Androids, etc.) */
+@media (max-width: 380px) {
+    #about-me-panel {
+        padding: 22px 16px 18px;
+        border-radius: 18px;
+    }
+
+    #about-me-panel .social-btn {
+        width: 38px;
+        height: 38px;
+        font-size: 14px;
+    }
+}
+
+/* Landscape phones: panel and loading text sit too close to the top/bottom edges otherwise */
+@media (max-height: 420px) and (orientation: landscape) {
+    #about-me-panel {
+        max-height: 90vh;
+        padding: 16px 18px 14px;
+    }
+
+    #about-me-panel .panel-divider {
+        margin-bottom: 10px;
+    }
+
+    #about-me-panel .bio {
+        margin-bottom: 10px;
+    }
+}
