@@ -1,3 +1,112 @@
+// ===========================================================================
+// Environment + loading-UI helpers
+// (defined first so that ANY failure further down can be shown on screen)
+// ===========================================================================
+const isMobile =
+    /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1); // iPadOS
+
+const loadingEl = document.getElementById('loading');
+const percentEl = document.getElementById('loading-percent');
+const loadingTextEl = document.querySelector('.loading-text');
+const spinnerEl = document.querySelector('.spinner');
+const loaderContentEl = document.querySelector('.loader-content');
+
+let fatalShown = false;
+let shownPercent = 0;
+
+// Open the site with ?debug at the end of the URL (e.g. https://yoursite.netlify.app/?debug)
+// to see errors and device info in a small overlay — handy on an iPhone without a Mac.
+const DEBUG = /[?&]debug(=|&|$)/.test(window.location.search);
+let debugEl = null;
+
+function debugLog(msg) {
+    if (!DEBUG) return;
+    if (!debugEl) {
+        debugEl = document.createElement('div');
+        debugEl.style.cssText =
+            'position:fixed;top:0;left:0;right:0;max-height:45vh;overflow:hidden;z-index:10000;' +
+            'padding:6px 8px;background:rgba(0,0,0,0.75);color:#ff8a8a;font:10px/1.4 monospace;' +
+            'white-space:pre-wrap;word-break:break-all;pointer-events:none;';
+        document.body.appendChild(debugEl);
+    }
+    debugEl.textContent += msg + '\n';
+}
+
+window.addEventListener('error', (e) => {
+    debugLog('ERROR: ' + e.message + ' @' + String(e.filename || '').split('/').pop() + ':' + e.lineno);
+});
+window.addEventListener('unhandledrejection', (e) => {
+    debugLog('REJECTION: ' + ((e.reason && e.reason.message) || e.reason));
+});
+
+function setProgress(p) {
+    shownPercent = Math.max(shownPercent, Math.min(100, Math.round(p)));
+    if (percentEl) percentEl.textContent = shownPercent + '%';
+}
+
+function hideLoading() {
+    if (fatalShown || !loadingEl) return;
+    loadingEl.style.opacity = '0';
+    setTimeout(() => { if (!fatalShown) loadingEl.style.display = 'none'; }, 800);
+}
+
+function showFatal(message) {
+    fatalShown = true;
+    console.error(message);
+    debugLog('FATAL: ' + message);
+
+    if (spinnerEl) spinnerEl.style.display = 'none';
+    if (loadingTextEl) loadingTextEl.style.display = 'none';
+
+    if (loaderContentEl) {
+        let msgEl = document.getElementById('loading-error-msg');
+        if (!msgEl) {
+            const box = document.createElement('div');
+            box.id = 'loading-error';
+            box.style.cssText =
+                'display:flex;flex-direction:column;align-items:center;gap:16px;' +
+                'max-width:80vw;text-align:center;';
+
+            msgEl = document.createElement('div');
+            msgEl.id = 'loading-error-msg';
+            msgEl.style.cssText = 'color:#ff8a8a;font-size:14px;line-height:1.6;word-break:break-word;';
+
+            const btn = document.createElement('button');
+            btn.textContent = 'Reload';
+            btn.style.cssText =
+                'padding:10px 22px;border-radius:999px;border:1px solid rgba(255,255,255,0.3);' +
+                'background:transparent;color:#fff;font-size:14px;';
+            btn.addEventListener('click', () => window.location.reload());
+
+            box.appendChild(msgEl);
+            box.appendChild(btn);
+            loaderContentEl.appendChild(box);
+        }
+        msgEl.textContent = message;
+    }
+
+    if (loadingEl) {
+        loadingEl.style.display = 'flex';
+        loadingEl.style.visibility = 'visible';
+        loadingEl.style.opacity = '1';
+    }
+}
+
+// If a CDN script was blocked / failed, say so instead of showing a dead page.
+if (
+    typeof THREE === 'undefined' ||
+    typeof gsap === 'undefined' ||
+    !THREE.OrbitControls ||
+    !THREE.GLTFLoader
+) {
+    showFatal('Required libraries failed to load. Check your connection and reload.');
+    throw new Error('Missing dependency: THREE / OrbitControls / GLTFLoader / gsap');
+}
+
+// ===========================================================================
+// Scene, camera, renderer
+// ===========================================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0b0b);
 
@@ -13,13 +122,33 @@ function updateCameraForViewport() {
 }
 updateCameraForViewport();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+let renderer;
+try {
+    renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+} catch (err) {
+    showFatal('WebGL is not available on this device or browser.');
+    throw err;
+}
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+// Phones have far less GPU memory: a lower pixel ratio saves a lot of it.
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
 document.body.appendChild(renderer.domElement);
+
+// iOS kills the WebGL context when memory runs out — show a message instead of a black page.
+renderer.domElement.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();
+    showFatal('The device ran out of graphics memory. Close other tabs and reload.');
+});
+
+debugLog(
+    'WebGL' + (renderer.capabilities.isWebGL2 ? '2' : '1') +
+    ' | maxTex=' + renderer.capabilities.maxTextureSize +
+    ' | dpr=' + window.devicePixelRatio +
+    ' | mobile=' + isMobile
+);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -43,33 +172,38 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
+// Real loading: the overlay stays until the room model AND all artwork images
+// are finished (progress is real, not a fixed 2-second timer).
+// A failed single image is non-fatal; a failed model is shown on screen.
 // ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
-const percentEl = document.getElementById('loading-percent');
-const loadingEl = document.getElementById('loading');
-
-let currentPercent = 0;
-const loadingInterval = setInterval(() => {
-    currentPercent += 5;
-    if (currentPercent > 100) currentPercent = 100;
-    if (percentEl) percentEl.innerText = currentPercent + '%';
-
-    if (currentPercent === 100) {
-        clearInterval(loadingInterval);
-        if (loadingEl) {
-            loadingEl.style.opacity = '0';
-            setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
-        }
-    }
-}, 100);
-
 loadingManager.onError = (url) => {
     console.error('خطا در بارگذاری فایل:', url);
-    if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
+    debugLog('Failed to load: ' + url);
 };
 
 const textureLoader = new THREE.TextureLoader(loadingManager);
+
+// Images bigger than this are shrunk in the browser before being sent to the GPU.
+// (Still worth resizing the files themselves to ~1600px so they download faster.)
+const MAX_TEXTURE_SIZE = isMobile ? 1536 : 2048;
+
+function downscaleTextureIfNeeded(texture) {
+    const img = texture.image;
+    if (!img || !img.width || !img.height) return;
+
+    const longest = Math.max(img.width, img.height);
+    if (longest <= MAX_TEXTURE_SIZE) return;
+
+    const scale = MAX_TEXTURE_SIZE / longest;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.width * scale));
+    canvas.height = Math.max(1, Math.round(img.height * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    texture.image = canvas;
+    texture.needsUpdate = true;
+}
 
 const entranceView = {
     pos: [16.79, 1.32, -0.62],
@@ -210,6 +344,9 @@ const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
 let artworks = [];
 let currentIndex = -1;
 let isAnimating = false;
+// Stays false until the model + images are fully loaded. Swiping before that
+// used to jump straight to the "About" panel because `artworks` was empty.
+let sceneReady = false;
 
 function getWorldNormal(mesh) {
     const normal = new THREE.Vector3();
@@ -248,129 +385,199 @@ function computeOutwardDirection(art, viewpoint) {
     return dir.normalize();
 }
 
+// Returns a Promise that always resolves (true = loaded, false = failed),
+// so one broken image never blocks the rest of the gallery.
 function applyCustomImage(art, url) {
     // Tag each load request so a late-arriving older request can't clobber
     // a newer one if the user flips between artworks quickly.
     const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
 
-    textureLoader.load(
-        url,
-        (texture) => {
-            if (art.imageRequestId !== requestId) {
-                // A newer load for this artwork started after this one — discard.
-                texture.dispose();
-                return;
+    return new Promise((resolve) => {
+        textureLoader.load(
+            url,
+            (texture) => {
+                try {
+                    if (art.imageRequestId !== requestId) {
+                        // A newer load for this artwork started after this one — discard.
+                        texture.dispose();
+                        resolve(false);
+                        return;
+                    }
+
+                    downscaleTextureIfNeeded(texture);
+                    texture.encoding = THREE.sRGBEncoding;
+
+                    if (art.imageMesh) {
+                        scene.remove(art.imageMesh);
+                        art.imageMesh.geometry.dispose();
+                        art.imageMesh.material.map?.dispose();
+                        art.imageMesh.material.dispose();
+                    }
+
+                    const outward = art.outwardDir;
+                    const manual = art.config.size || {};
+                    const width = manual.width || 0.5;
+                    const height = manual.height || 0.7;
+
+                    const dist = manual.dist !== undefined ? manual.dist : 0.03;
+                    const offsetX = manual.offsetX || 0;
+                    const offsetY = manual.offsetY || 0;
+
+                    const worldUp = new THREE.Vector3(0, 1, 0);
+                    const right = new THREE.Vector3().crossVectors(worldUp, outward);
+                    if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+                    right.normalize();
+                    const up = new THREE.Vector3().crossVectors(outward, right).normalize();
+
+                    const geometry = new THREE.PlaneGeometry(width, height);
+                    const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
+                    const planeMesh = new THREE.Mesh(geometry, material);
+
+                    planeMesh.position.copy(art.worldCenter);
+                    planeMesh.position.addScaledVector(outward, dist);
+                    planeMesh.position.addScaledVector(right, offsetX);
+                    planeMesh.position.addScaledVector(up, offsetY);
+                    planeMesh.lookAt(art.worldCenter.clone().add(outward));
+
+                    if (manual.degX) planeMesh.rotation.x += THREE.MathUtils.degToRad(manual.degX);
+                    if (manual.degY) planeMesh.rotation.y += THREE.MathUtils.degToRad(manual.degY);
+                    if (manual.degZ) planeMesh.rotation.z += THREE.MathUtils.degToRad(manual.degZ);
+
+                    scene.add(planeMesh);
+                    art.imageMesh = planeMesh;
+                    resolve(true);
+                } catch (err) {
+                    console.error(`خطا در پردازش تصویر ${url}:`, err);
+                    debugLog('Image processing failed: ' + url);
+                    resolve(false);
+                }
+            },
+            undefined,
+            (err) => {
+                console.error(`خطا در بارگذاری تصویر ${url}:`, err);
+                debugLog('Image failed to load: ' + url);
+                resolve(false);
             }
+        );
+    });
+}
 
-            texture.encoding = THREE.sRGBEncoding;
+// Loads images a few at a time instead of all at once (lower peak memory on phones).
+async function loadImagesWithLimit(list, limit, onEach) {
+    let next = 0;
+    async function worker() {
+        while (next < list.length) {
+            const art = list[next++];
+            await applyCustomImage(art, art.config.image);
+            onEach();
+        }
+    }
+    const workers = [];
+    for (let i = 0; i < Math.min(limit, list.length); i++) workers.push(worker());
+    await Promise.all(workers);
+}
 
-            if (art.imageMesh) {
-                scene.remove(art.imageMesh);
-                art.imageMesh.geometry.dispose();
-                art.imageMesh.material.map?.dispose();
-                art.imageMesh.material.dispose();
+// ---------------------------------------------------------------------------
+// Room model
+// ---------------------------------------------------------------------------
+function setupModel(gltf) {
+    const model = gltf.scene;
+    scene.add(model);
+
+    if (gltf.animations?.length) {
+        mixer = new THREE.AnimationMixer(model);
+        gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+    }
+
+    model.updateMatrixWorld(true);
+
+    const foundMeshes = {};
+    model.traverse((child) => {
+        if (!child.isMesh) return;
+
+        const candidates = [normalizeName(child.name)];
+        if (child.parent?.name) candidates.push(normalizeName(child.parent.name));
+
+        for (const candidate of candidates) {
+            const idx = NORMALIZED_TARGETS.indexOf(candidate);
+            if (idx !== -1 && !foundMeshes[NORMALIZED_TARGETS[idx]]) {
+                foundMeshes[NORMALIZED_TARGETS[idx]] = child;
             }
+        }
+    });
 
-            const outward = art.outwardDir;
-            const manual = art.config.size || {};
-            const width = manual.width || 0.5;
-            const height = manual.height || 0.7;
+    artworks = ARTWORK_CONFIG
+        .map((config, i) => {
+            const mesh = foundMeshes[NORMALIZED_TARGETS[i]];
+            if (!mesh) return null;
 
-            const dist = manual.dist !== undefined ? manual.dist : 0.03;
-            const offsetX = manual.offsetX || 0;
-            const offsetY = manual.offsetY || 0;
+            const nodePos = new THREE.Vector3();
+            mesh.getWorldPosition(nodePos);
 
-            const worldUp = new THREE.Vector3(0, 1, 0);
-            const right = new THREE.Vector3().crossVectors(worldUp, outward);
-            if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
-            right.normalize();
-            const up = new THREE.Vector3().crossVectors(outward, right).normalize();
+            const boxCenter = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
+            const worldCenter = nodePos.length() < 0.5 ? boxCenter : nodePos;
 
-            const geometry = new THREE.PlaneGeometry(width, height);
-            const material = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide });
-            const planeMesh = new THREE.Mesh(geometry, material);
+            return { name: config.name, config, mesh, worldCenter, normal: getWorldNormal(mesh) };
+        })
+        .filter(Boolean);
 
-            planeMesh.position.copy(art.worldCenter);
-            planeMesh.position.addScaledVector(outward, dist);
-            planeMesh.position.addScaledVector(right, offsetX);
-            planeMesh.position.addScaledVector(up, offsetY);
-            planeMesh.lookAt(art.worldCenter.clone().add(outward));
+    artworks.forEach((art) => {
+        art.viewpoint = computeViewpointForArtwork(art);
+        art.outwardDir = computeOutwardDirection(art, art.viewpoint);
+        const camPos = new THREE.Vector3(...art.viewpoint.pos);
+        const tgt = new THREE.Vector3(...art.viewpoint.target);
+        const offset = camPos.sub(tgt);
+        art.baseAzimuth = Math.atan2(offset.x, offset.z);
+    });
 
-            if (manual.degX) planeMesh.rotation.x += THREE.MathUtils.degToRad(manual.degX);
-            if (manual.degY) planeMesh.rotation.y += THREE.MathUtils.degToRad(manual.degY);
-            if (manual.degZ) planeMesh.rotation.z += THREE.MathUtils.degToRad(manual.degZ);
-
-            scene.add(planeMesh);
-            art.imageMesh = planeMesh;
-        },
-        undefined,
-        (err) => console.error(`خطا در بارگذاری تصویر ${url}:`, err)
-    );
+    debugLog('Artworks matched: ' + artworks.length + '/' + ARTWORK_CONFIG.length);
+    if (artworks.length < ARTWORK_CONFIG.length) {
+        console.warn('بعضی از آثار در مدل پیدا نشدند:', artworks.length + '/' + ARTWORK_CONFIG.length);
+    }
 }
 
 const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
-    'room3.copy.glb',
+    'room3.glb',
     (gltf) => {
-        const model = gltf.scene;
-        scene.add(model);
-
-        if (gltf.animations?.length) {
-            mixer = new THREE.AnimationMixer(model);
-            gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
+        try {
+            setupModel(gltf);
+        } catch (err) {
+            showFatal('Scene setup failed: ' + ((err && err.message) || err));
+            return;
         }
 
-        model.updateMatrixWorld(true);
+        setProgress(70); // model done = 70%, images fill the remaining 30%
 
-        const foundMeshes = {};
-        model.traverse((child) => {
-            if (!child.isMesh) return;
+        const withImages = artworks.filter((a) => a.config.image);
+        let done = 0;
 
-            const candidates = [normalizeName(child.name)];
-            if (child.parent?.name) candidates.push(normalizeName(child.parent.name));
-
-            for (const candidate of candidates) {
-                const idx = NORMALIZED_TARGETS.indexOf(candidate);
-                if (idx !== -1 && !foundMeshes[NORMALIZED_TARGETS[idx]]) {
-                    foundMeshes[NORMALIZED_TARGETS[idx]] = child;
-                }
-            }
-        });
-
-        artworks = ARTWORK_CONFIG
-            .map((config, i) => {
-                const mesh = foundMeshes[NORMALIZED_TARGETS[i]];
-                if (!mesh) return null;
-
-                const nodePos = new THREE.Vector3();
-                mesh.getWorldPosition(nodePos);
-
-                const boxCenter = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
-                const worldCenter = nodePos.length() < 0.5 ? boxCenter : nodePos;
-
-                return { name: config.name, config, mesh, worldCenter, normal: getWorldNormal(mesh) };
-            })
-            .filter(Boolean);
-
-        artworks.forEach((art) => {
-            art.viewpoint = computeViewpointForArtwork(art);
-            art.outwardDir = computeOutwardDirection(art, art.viewpoint);
-            const camPos = new THREE.Vector3(...art.viewpoint.pos);
-            const tgt = new THREE.Vector3(...art.viewpoint.target);
-            const offset = camPos.sub(tgt);
-            art.baseAzimuth = Math.atan2(offset.x, offset.z);
-        });
-
-        artworks.forEach((art) => {
-            if (art.config.image) applyCustomImage(art, art.config.image);
+        loadImagesWithLimit(withImages, 3, () => {
+            done++;
+            setProgress(70 + (done / withImages.length) * 30);
+        }).then(() => {
+            sceneReady = true;
+            setProgress(100);
+            hideLoading();
         });
     },
-    undefined,
+    (xhr) => {
+        // Model download progress (0–70%). If the server doesn't report a total size, show MB instead.
+        if (xhr.lengthComputable && xhr.total > 0) {
+            setProgress((xhr.loaded / xhr.total) * 70);
+        } else if (percentEl && !fatalShown) {
+            percentEl.textContent = (xhr.loaded / 1048576).toFixed(1) + ' MB';
+        }
+    },
     (error) => {
         console.error('خطا در بارگذاری مدل:', error);
+        showFatal('Failed to load the gallery model (room3.copy.glb). Check your connection and reload.');
     }
 );
 
+// ---------------------------------------------------------------------------
+// Camera navigation
+// ---------------------------------------------------------------------------
 function flyTo(viewpoint, onArrive) {
     isAnimating = true;
     gsap.to(camera.position, {
@@ -425,6 +632,7 @@ function updateAboutPanel(index) {
 }
 
 function goToIndex(index) {
+    if (!sceneReady) return; // model/images not loaded yet — ignore swipes and clicks
     if (isAnimating || index < -1 || index > artworks.length || index === currentIndex) return;
     if (Math.abs(index - currentIndex) > 1) return;
 
@@ -454,6 +662,9 @@ function stepIndex(direction) {
     goToIndex(currentIndex + direction);
 }
 
+// ---------------------------------------------------------------------------
+// Input: click / wheel / touch
+// ---------------------------------------------------------------------------
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let pointerDownPos = null;
