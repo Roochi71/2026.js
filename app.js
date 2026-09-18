@@ -3,6 +3,8 @@ scene.background = new THREE.Color(0x0b0b0b);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
+// On narrow/portrait screens (most phones) a 60° FOV crops the room too
+// tightly. Widen it automatically so more of the scene stays in frame.
 function updateCameraForViewport() {
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
@@ -18,17 +20,6 @@ renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
 document.body.appendChild(renderer.domElement);
-
-// هندل کردن از دست رفتن Context وب‌جی‌ال در موبایل برای جلوگیری از فریز دائمی
-renderer.domElement.addEventListener('webglcontextlost', (event) => {
-    event.preventDefault();
-    console.warn('WebGL Context Lost. Trying to restore...');
-}, false);
-
-renderer.domElement.addEventListener('webglcontextrestored', () => {
-    console.log('WebGL Context Restored.');
-    window.location.reload();
-}, false);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -51,13 +42,16 @@ scene.add(dirLight);
 let mixer;
 const clock = new THREE.Clock();
 
+// ---------------------------------------------------------------------------
+// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
+// ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
 const percentEl = document.getElementById('loading-percent');
 const loadingEl = document.getElementById('loading');
 
 let currentPercent = 0;
 const loadingInterval = setInterval(() => {
-    currentPercent += 10;
+    currentPercent += 5;
     if (currentPercent > 100) currentPercent = 100;
     if (percentEl) percentEl.innerText = currentPercent + '%';
 
@@ -68,10 +62,11 @@ const loadingInterval = setInterval(() => {
             setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
         }
     }
-}, 80);
+}, 100);
 
 loadingManager.onError = (url) => {
     console.error('خطا در بارگذاری فایل:', url);
+    if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
 };
 
 const textureLoader = new THREE.TextureLoader(loadingManager);
@@ -88,6 +83,12 @@ const aboutView = {
     target: [-5.59, 1.54, -1.33]
 };
 
+// ---------------------------------------------------------------------------
+// Unified per-artwork configuration
+// (replaces EXACT_ARTWORK_NAMES + CUSTOM_IMAGES + CUSTOM_IMAGE_SIZE + MANUAL_OVERRIDES)
+// Each artwork now lives in exactly one place, keyed once — no repeated name
+// strings across four separate objects.
+// ---------------------------------------------------------------------------
 const ARTWORK_CONFIG = [
     {
         name: "jake and london eye_london eye manual bake_0",
@@ -203,6 +204,7 @@ function normalizeName(str) {
 }
 
 const NORMALIZED_TARGETS = ARTWORK_CONFIG.map((a) => normalizeName(a.name));
+
 const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
 
 let artworks = [];
@@ -246,17 +248,28 @@ function computeOutwardDirection(art, viewpoint) {
     return dir.normalize();
 }
 
-// اصلاح بارگذاری تکسچر به صورت تنبل (Lazy Load) برای جلوگیری از سنگین شدن رم موبایل
 function applyCustomImage(art, url) {
-    if (art.isLoaded || art.isLoading) return;
-    art.isLoading = true;
+    // Tag each load request so a late-arriving older request can't clobber
+    // a newer one if the user flips between artworks quickly.
+    const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
 
     textureLoader.load(
         url,
         (texture) => {
-            art.isLoaded = true;
-            art.isLoading = false;
+            if (art.imageRequestId !== requestId) {
+                // A newer load for this artwork started after this one — discard.
+                texture.dispose();
+                return;
+            }
+
             texture.encoding = THREE.sRGBEncoding;
+
+            if (art.imageMesh) {
+                scene.remove(art.imageMesh);
+                art.imageMesh.geometry.dispose();
+                art.imageMesh.material.map?.dispose();
+                art.imageMesh.material.dispose();
+            }
 
             const outward = art.outwardDir;
             const manual = art.config.size || {};
@@ -291,10 +304,7 @@ function applyCustomImage(art, url) {
             art.imageMesh = planeMesh;
         },
         undefined,
-        (err) => {
-            art.isLoading = false;
-            console.error(`خطا در بارگذاری تصویر ${url}:`, err);
-        }
+        (err) => console.error(`خطا در بارگذاری تصویر ${url}:`, err)
     );
 }
 
@@ -338,7 +348,7 @@ loader.load(
                 const boxCenter = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
                 const worldCenter = nodePos.length() < 0.5 ? boxCenter : nodePos;
 
-                return { name: config.name, config, mesh, worldCenter, normal: getWorldNormal(mesh), isLoaded: false, isLoading: false };
+                return { name: config.name, config, mesh, worldCenter, normal: getWorldNormal(mesh) };
             })
             .filter(Boolean);
 
@@ -351,12 +361,9 @@ loader.load(
             art.baseAzimuth = Math.atan2(offset.x, offset.z);
         });
 
-        // لود کردن فقط 3 تصویر اول در ابتدا برای جلوگیری از لودینگ سنگین اولیه روی موبایل
-        for (let i = 0; i < Math.min(3, artworks.length); i++) {
-            if (artworks[i].config.image) {
-                applyCustomImage(artworks[i], artworks[i].config.image);
-            }
-        }
+        artworks.forEach((art) => {
+            if (art.config.image) applyCustomImage(art, art.config.image);
+        });
     },
     undefined,
     (error) => {
@@ -390,11 +397,25 @@ function updateAboutPanel(index) {
             <h3 class="name">Your Company Name</h3>
             <p class="role">Photographer</p>
             <div class="panel-divider"></div>
-            <p class="bio">I'm a passionate photographer with over [X] years of experience...</p>
+            <p class="bio">I'm a passionate photographer with over [X] years of experience capturing life's most precious moments. My work specializes in [wedding / portrait / nature] photography, where every shot tells a unique story.</p>
             <div class="panel-divider"></div>
             <h4 class="contact-title">Contact me</h4>
             <div class="social-links">
-                <a href="#" class="social-btn btn-whatsapp"><i class="fa-brands fa-whatsapp"></i></a>
+                <a href="https://wa.me/YOUR_PHONE" target="_blank" class="social-btn btn-whatsapp" title="WhatsApp">
+                    <i class="fa-brands fa-whatsapp"></i>
+                </a>
+                <a href="https://instagram.com/YOUR_ID" target="_blank" class="social-btn btn-instagram" title="Instagram">
+                    <i class="fa-brands fa-instagram"></i>
+                </a>
+                <a href="https://linkedin.com/in/YOUR_ID" target="_blank" class="social-btn btn-linkedin" title="LinkedIn">
+                    <i class="fa-brands fa-linkedin"></i>
+                </a>
+                <a href="https://youtube.com/@YOUR_ID" target="_blank" class="social-btn btn-youtube" title="YouTube">
+                    <i class="fa-brands fa-youtube"></i>
+                </a>
+                <a href="https://t.me/YOUR_ID" target="_blank" class="social-btn btn-telegram" title="Telegram">
+                    <i class="fa-brands fa-telegram"></i>
+                </a>
             </div>
         `;
         aboutPanel.style.display = 'block';
@@ -419,15 +440,6 @@ function goToIndex(index) {
         flyTo(aboutView);
     } else {
         const art = artworks[index];
-        // لود شدن تصویر اثر فعلی و آثار مجاور به محض رسیدن به آن‌ها (Lazy Loading)
-        if (art.config.image) applyCustomImage(art, art.config.image);
-        if (index + 1 < artworks.length && artworks[index + 1].config.image) {
-            applyCustomImage(artworks[index + 1], artworks[index + 1].config.image);
-        }
-        if (index - 1 >= 0 && artworks[index - 1].config.image) {
-            applyCustomImage(artworks[index - 1], artworks[index - 1].config.image);
-        }
-
         flyTo(art.viewpoint, () => {
             controls.enableRotate = true;
             controls.minAzimuthAngle = art.baseAzimuth - ARTWORK_AZIMUTH_RANGE;
@@ -478,25 +490,26 @@ window.addEventListener('wheel', (e) => {
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
+// Distance (px) the finger needs to travel to advance one artwork.
+// Tracking is continuous via touchmove instead of only comparing
+// start/end points, so the gesture feels live instead of laggy.
 const TOUCH_STEP_DISTANCE = 60;
 let touchLastY = null;
 let touchAccum = 0;
 
 window.addEventListener('touchstart', (e) => {
-    if (e.touches.length > 0) {
-        touchLastY = e.touches[0].clientY;
-        touchAccum = 0;
-    }
+    touchLastY = e.touches[0].clientY;
+    touchAccum = 0;
 }, { passive: true });
 
 window.addEventListener('touchmove', (e) => {
-    if (touchLastY === null || e.touches.length === 0) return;
+    if (touchLastY === null) return;
 
     const currentY = e.touches[0].clientY;
-    const delta = touchLastY - currentY;
+    const delta = touchLastY - currentY; // swipe up (finger moves up) -> positive -> go forward
     touchLastY = currentY;
 
-    if (isAnimating) return;
+    if (isAnimating) return; // camera is mid fly-to; ignore extra input until it settles
 
     touchAccum += delta;
     while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
@@ -504,7 +517,7 @@ window.addEventListener('touchmove', (e) => {
         stepIndex(direction);
         touchAccum -= direction * TOUCH_STEP_DISTANCE;
         if (isAnimating) {
-            touchAccum = 0;
+            touchAccum = 0; // an animation just started; wait for it before stepping again
             break;
         }
     }
