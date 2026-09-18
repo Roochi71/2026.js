@@ -3,8 +3,6 @@ scene.background = new THREE.Color(0x0b0b0b);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// On narrow/portrait screens (most phones) a 60° FOV crops the room too
-// tightly. Widen it automatically so more of the scene stays in frame.
 function updateCameraForViewport() {
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
@@ -13,13 +11,31 @@ function updateCameraForViewport() {
 }
 updateCameraForViewport();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({ 
+    antialias: window.innerWidth > 768, 
+    powerPreference: "default",
+    alpha: false,
+    failIfMajorPerformanceCaveat: false
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+const isMobile = window.innerWidth < 768;
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
 document.body.appendChild(renderer.domElement);
+
+renderer.domElement.addEventListener('webglcontextlost', (event) => {
+    event.preventDefault();
+    console.warn('WebGL Context Lost. در حال تلاش برای بازیابی...');
+}, false);
+
+renderer.domElement.addEventListener('webglcontextrestored', () => {
+    console.log('WebGL Context Restored.');
+    window.location.reload();
+}, false);
 
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
@@ -42,9 +58,6 @@ scene.add(dirLight);
 let mixer;
 const clock = new THREE.Clock();
 
-// ---------------------------------------------------------------------------
-// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
-// ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
 const percentEl = document.getElementById('loading-percent');
 const loadingEl = document.getElementById('loading');
@@ -83,16 +96,10 @@ const aboutView = {
     target: [-5.59, 1.54, -1.33]
 };
 
-// ---------------------------------------------------------------------------
-// Unified per-artwork configuration
-// (replaces EXACT_ARTWORK_NAMES + CUSTOM_IMAGES + CUSTOM_IMAGE_SIZE + MANUAL_OVERRIDES)
-// Each artwork now lives in exactly one place, keyed once — no repeated name
-// strings across four separate objects.
-// ---------------------------------------------------------------------------
 const ARTWORK_CONFIG = [
     {
         name: "jake and london eye_london eye manual bake_0",
-        image: './1.jpg',
+        image: '1.jpg',
         size: { width: 0.66, height: 0.81, dist: 0.01, offsetX: 0.01, offsetY: -0.005, degX: 3, degY: 5, degZ: -1 },
         override: { pos: [11.30, 1.60, -1.50], target: [10.50, 1.60, -3.00] }
     },
@@ -104,96 +111,96 @@ const ARTWORK_CONFIG = [
     },
     {
         name: "Eddie and horse_propinquity early manual bake_0",
-        image: './one.jpg',
+        image: 'one.jpg',
         size: { width: 0.55, height: 0.75, dist: 0.015, offsetX: 0, offsetY: -0.01, degX: 0, degY: 1, degZ: 0 },
         override: { pos: [12.68, 1.63, 2.65], target: [12.80, 1.64, 3.84] }
     },
     {
         name: "Object004_holly manual bake_0",
-        image: './two.jpg',
+        image: 'two.jpg',
         size: { width: 0.18, height: 0.29, dist: 0.005, offsetX: 0, offsetY: 0, degX: -12, degY: 2, degZ: 6 },
         override: { pos: [11.90, 1.46, 0.09], target: [11.44, 1.14, 0.78] }
     },
     {
         name: "jakeframe_jake manua bake_0",
-        image: './three.jpg',
+        image: 'three.jpg',
         size: { width: 0.44, height: 0.74, dist: -0.005, offsetX: 0, offsetY: 0, degX: -4, degY: -2, degZ: 4 }
     },
     {
         name: "SIMON AND JAKE_simon manual bake_0",
-        image: './four.jpg',
+        image: 'four.jpg',
         size: { width: 0.28, height: 0.45, dist: 0.005, offsetX: 0, offsetY: 0, degX: 0, degY: 1, degZ: 0 }
     },
     {
         name: "Object005_squirrel manual bake_0",
-        image: './five.jpg',
+        image: 'five.jpg',
         size: { width: 0.51, height: 0.48, dist: 0.005, offsetX: -0.005, offsetY: 0, degX: -2, degY: -2, degZ: 0 },
         override: { pos: [7.95, 1.60, -1], target: [7.95, 1.31, 1.97] }
     },
     {
         name: "Object006_tess manual bake_0",
-        image: './six.jpg',
+        image: 'six.jpg',
         size: { width: 0.54, height: 0.55, dist: 0.01, offsetX: 0, offsetY: 0, degX: 0, degY: -6, degZ: 0 },
         override: { pos: [6.38, 1.56, 1.50], target: [6.38, 1.56, -2.78] }
     },
     {
         name: "Loveknot and tess_Loveknot Manual Bake_0",
-        image: './seven.jpg',
+        image: 'seven.jpg',
         size: { width: 0.45, height: 0.37, dist: 0.005, offsetX: 0, offsetY: 0, degX: -2, degY: 0, degZ: 0 }
     },
     {
         name: "scarlett frame_scarlett manual bake_0",
-        image: './eight.jpg',
+        image: 'eight.jpg',
         size: { width: 0.52, height: 0.69, dist: 0.01, offsetX: 0.005, offsetY: 0, degX: -5, degY: 8, degZ: -1 },
         override: { pos: [3.20, 1.46, 0.77], target: [3.21, 1.46, -1.70] }
     },
     {
         name: "Object010_squirrel manual bake_0",
-        image: './nine.jpg',
+        image: 'nine.jpg',
         size: { width: 0.5, height: 0.56, dist: 0.005, offsetX: -0.005, offsetY: 0, degX: -2, degY: -5, degZ: 0 },
         override: { pos: [2.96, 1.60, -1], target: [2.96, 1.50, -0.10] }
     },
     {
         name: "weeebo and tiggy_weebo manual bake_0",
-        image: './teen.jpg',
+        image: 'teen.jpg',
         size: { width: 0.39, height: 0.24, dist: 0, offsetX: 0, offsetY: 0, degX: -3, degY: 0, degZ: 0 }
     },
     {
         name: "Object007_tiggy manual bake_0",
-        image: './eleven.jpg',
+        image: 'eleven.jpg',
         size: { width: 0.39, height: 0.53, dist: 0, offsetX: -0.03, offsetY: -0.05, degX: -5, degY: -6, degZ: 0 },
         override: { pos: [0.48, 1.68, -1.16], target: [0.48, 1.65, 0.96] }
     },
     {
         name: "aston manual bake_aston manual bake_0",
-        image: './twelve.jpg',
+        image: 'twelve.jpg',
         size: { width: 0.95, height: 0.61, dist: 0.005, offsetX: 0, offsetY: 0, degX: 1, degY: 0, degZ: 0 }
     },
     {
         name: "boat_boat manual bake_0",
-        image: './thirteen.jpg',
+        image: 'thirteen.jpg',
         size: { width: 0.94, height: 0.7, dist: 0.005, offsetX: 0.01, offsetY: -0.015, degX: -1, degY: 2, degZ: 0 },
         override: { pos: [-2.14, 1.60, -1], target: [-2.14, 1.56, 0.20] }
     },
     {
         name: "Object009_propinquity manual bake_0",
-        image: './fourteen.jpg',
+        image: 'fourteen.jpg',
         size: { width: 0.59, height: 0.81, dist: 0.005, offsetX: 0, offsetY: 0.01, degX: 6, degY: 0, degZ: 5 },
         override: { pos: [-6.62, 1.58, 1.31], target: [-5.54, 1.57, 2.06] }
     },
     {
         name: "seal 2_jag manual bake_0",
-        image: './fifteen.jpg',
+        image: 'fifteen.jpg',
         size: { width: 0.77, height: 0.48, dist: 0.005, offsetX: 0, offsetY: -0.01, degX: -9, degY: 0, degZ: 4 }
     },
     {
         name: "end frame_end frame manual bake_0",
-        image: './sixteen.jpg',
+        image: 'sixteen.jpg',
         size: { width: 0.77, height: 0.33, dist: -0.02, offsetX: 0.01, offsetY: -0.01, degX: 2, degY: 7, degZ: -2 }
     },
     {
         name: "horse and squirrel_seal manual bake_0",
-        image: './seventeen.jpg',
+        image: 'seventeen.jpg',
         size: { width: 0.57, height: 0.35, dist: 0, offsetX: 0, offsetY: 0, degX: -2, degY: 3, degZ: -2 },
         override: { pos: [-6.31, 1.55, -1.86], target: [-5.59, 1.54, -2.33] }
     }
@@ -204,7 +211,6 @@ function normalizeName(str) {
 }
 
 const NORMALIZED_TARGETS = ARTWORK_CONFIG.map((a) => normalizeName(a.name));
-
 const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
 
 let artworks = [];
@@ -249,19 +255,15 @@ function computeOutwardDirection(art, viewpoint) {
 }
 
 function applyCustomImage(art, url) {
-    // Tag each load request so a late-arriving older request can't clobber
-    // a newer one if the user flips between artworks quickly.
     const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
 
     textureLoader.load(
         url,
         (texture) => {
             if (art.imageRequestId !== requestId) {
-                // A newer load for this artwork started after this one — discard.
                 texture.dispose();
                 return;
             }
-
             texture.encoding = THREE.sRGBEncoding;
 
             if (art.imageMesh) {
@@ -275,7 +277,6 @@ function applyCustomImage(art, url) {
             const manual = art.config.size || {};
             const width = manual.width || 0.5;
             const height = manual.height || 0.7;
-
             const dist = manual.dist !== undefined ? manual.dist : 0.03;
             const offsetX = manual.offsetX || 0;
             const offsetY = manual.offsetY || 0;
@@ -310,7 +311,7 @@ function applyCustomImage(art, url) {
 
 const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
-    'room3.glb',
+    'room3.copy.glb',
     (gltf) => {
         const model = gltf.scene;
         scene.add(model);
@@ -325,7 +326,6 @@ loader.load(
         const foundMeshes = {};
         model.traverse((child) => {
             if (!child.isMesh) return;
-
             const candidates = [normalizeName(child.name)];
             if (child.parent?.name) candidates.push(normalizeName(child.parent.name));
 
@@ -366,9 +366,7 @@ loader.load(
         });
     },
     undefined,
-    (error) => {
-        console.error('خطا در بارگذاری مدل:', error);
-    }
+    (error) => { console.error('خطا در بارگذاری مدل:', error); }
 );
 
 function flyTo(viewpoint, onArrive) {
@@ -397,25 +395,13 @@ function updateAboutPanel(index) {
             <h3 class="name">Your Company Name</h3>
             <p class="role">Photographer</p>
             <div class="panel-divider"></div>
-            <p class="bio">I'm a passionate photographer with over [X] years of experience capturing life's most precious moments. My work specializes in [wedding / portrait / nature] photography, where every shot tells a unique story.</p>
+            <p class="bio">I'm a passionate photographer capturing life's most precious moments.</p>
             <div class="panel-divider"></div>
             <h4 class="contact-title">Contact me</h4>
             <div class="social-links">
-                <a href="https://wa.me/YOUR_PHONE" target="_blank" class="social-btn btn-whatsapp" title="WhatsApp">
-                    <i class="fa-brands fa-whatsapp"></i>
-                </a>
-                <a href="https://instagram.com/YOUR_ID" target="_blank" class="social-btn btn-instagram" title="Instagram">
-                    <i class="fa-brands fa-instagram"></i>
-                </a>
-                <a href="https://linkedin.com/in/YOUR_ID" target="_blank" class="social-btn btn-linkedin" title="LinkedIn">
-                    <i class="fa-brands fa-linkedin"></i>
-                </a>
-                <a href="https://youtube.com/@YOUR_ID" target="_blank" class="social-btn btn-youtube" title="YouTube">
-                    <i class="fa-brands fa-youtube"></i>
-                </a>
-                <a href="https://t.me/YOUR_ID" target="_blank" class="social-btn btn-telegram" title="Telegram">
-                    <i class="fa-brands fa-telegram"></i>
-                </a>
+                <a href="https://wa.me/YOUR_PHONE" target="_blank" class="social-btn btn-whatsapp" title="WhatsApp"><i class="fa-brands fa-whatsapp"></i></a>
+                <a href="https://instagram.com/YOUR_ID" target="_blank" class="social-btn btn-instagram" title="Instagram"><i class="fa-brands fa-instagram"></i></a>
+                <a href="https://linkedin.com/in/YOUR_ID" target="_blank" class="social-btn btn-linkedin" title="LinkedIn"><i class="fa-brands fa-linkedin"></i></a>
             </div>
         `;
         aboutPanel.style.display = 'block';
@@ -429,7 +415,6 @@ function goToIndex(index) {
     if (Math.abs(index - currentIndex) > 1) return;
 
     currentIndex = index;
-
     controls.enableRotate = false;
     controls.minAzimuthAngle = -Infinity;
     controls.maxAzimuthAngle = Infinity;
@@ -446,7 +431,6 @@ function goToIndex(index) {
             controls.maxAzimuthAngle = art.baseAzimuth + ARTWORK_AZIMUTH_RANGE;
         });
     }
-
     updateAboutPanel(index);
 }
 
@@ -458,11 +442,11 @@ const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 let pointerDownPos = null;
 
-renderer.domElement.addEventListener('pointerdown', (e) => {
+window.addEventListener('pointerdown', (e) => {
     pointerDownPos = { x: e.clientX, y: e.clientY };
 });
 
-renderer.domElement.addEventListener('pointerup', (e) => {
+window.addEventListener('pointerup', (e) => {
     if (!pointerDownPos) return;
     const movedDist = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
     pointerDownPos = null;
@@ -483,16 +467,11 @@ let wheelCooldown = false;
 window.addEventListener('wheel', (e) => {
     e.preventDefault();
     if (isAnimating || wheelCooldown) return;
-
     wheelCooldown = true;
     setTimeout(() => { wheelCooldown = false; }, 150);
-
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-// Distance (px) the finger needs to travel to advance one artwork.
-// Tracking is continuous via touchmove instead of only comparing
-// start/end points, so the gesture feels live instead of laggy.
 const TOUCH_STEP_DISTANCE = 60;
 let touchLastY = null;
 let touchAccum = 0;
@@ -504,12 +483,11 @@ window.addEventListener('touchstart', (e) => {
 
 window.addEventListener('touchmove', (e) => {
     if (touchLastY === null) return;
-
     const currentY = e.touches[0].clientY;
-    const delta = touchLastY - currentY; // swipe up (finger moves up) -> positive -> go forward
+    const delta = touchLastY - currentY;
     touchLastY = currentY;
 
-    if (isAnimating) return; // camera is mid fly-to; ignore extra input until it settles
+    if (isAnimating) return;
 
     touchAccum += delta;
     while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
@@ -517,7 +495,7 @@ window.addEventListener('touchmove', (e) => {
         stepIndex(direction);
         touchAccum -= direction * TOUCH_STEP_DISTANCE;
         if (isAnimating) {
-            touchAccum = 0; // an animation just started; wait for it before stepping again
+            touchAccum = 0;
             break;
         }
     }
