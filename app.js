@@ -46,6 +46,7 @@ const clock = new THREE.Clock();
 let hasInteracted = false;
 
 function showScrollHint() {
+    if (document.getElementById('scroll-hint-popup')) return;
     const hint = document.createElement('div');
     hint.id = 'scroll-hint-popup';
     
@@ -194,7 +195,7 @@ const ARTWORK_CONFIG = [
     },
     {
         name: "Object003_eddie manuel bake_0",
-        image: '2.jpg',
+        image: './2.jpg',
         size: { width: 0.69, height: 0.55, dist: 0.005, offsetX: 0, offsetY: -0.02, degX: -1, degY: 7, degZ: 0 },
         override: { pos: [13.30, 1.60, 1.50], target: [13.75, 1.60, 2.00] }
     },
@@ -300,7 +301,6 @@ function normalizeName(str) {
 }
 
 const NORMALIZED_TARGETS = ARTWORK_CONFIG.map((a) => normalizeName(a.name));
-
 const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
 
 let artworks = [];
@@ -355,7 +355,7 @@ function applyCustomImage(art, url) {
                 return;
             }
 
-            texture.encoding = THREE.sRGBEncoding;
+            texture.colorSpace = THREE.SRGBColorSpace;
 
             if (art.imageMesh) {
                 scene.remove(art.imageMesh);
@@ -469,9 +469,14 @@ loader.load(
 
 function flyTo(viewpoint, onArrive) {
     isAnimating = true;
+    
+    // پاک کردن انیمیشن‌های قبلی برای جلوگیری از تداخل و گیر کردن
+    gsap.killTweensOf(camera.position);
+    gsap.killTweensOf(controls.target);
+
     gsap.to(camera.position, {
         x: viewpoint.pos[0], y: viewpoint.pos[1], z: viewpoint.pos[2],
-        duration: 2.8, ease: "power2.inOut",
+        duration: 2.2, ease: "power2.inOut",
         onComplete: () => {
             isAnimating = false;
             if (onArrive) onArrive();
@@ -479,7 +484,7 @@ function flyTo(viewpoint, onArrive) {
     });
     gsap.to(controls.target, {
         x: viewpoint.target[0], y: viewpoint.target[1], z: viewpoint.target[2],
-        duration: 2.0, ease: "power2.inOut",
+        duration: 2.2, ease: "power2.inOut",
         onUpdate: () => controls.update()
     });
 }
@@ -582,34 +587,33 @@ window.addEventListener('wheel', (e) => {
     wheelCooldown = true;
     setTimeout(() => {
         wheelCooldown = false;
-    }, 150);
+    }, 200);
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-const TOUCH_STEP_DISTANCE = 60;
+const TOUCH_STEP_DISTANCE = 50;
 let touchLastY = null;
 let touchAccum = 0;
 
 window.addEventListener('touchstart', (e) => {
-    touchLastY = e.touches[0].clientY;
-    touchAccum = 0;
+    if (e.touches.length > 0) {
+        touchLastY = e.touches[0].clientY;
+        touchAccum = 0;
+    }
 }, { passive: true });
 
 window.addEventListener('touchmove', (e) => {
-    if (touchLastY === null) return;
+    if (touchLastY === null || e.touches.length === 0) return;
     const currentY = e.touches[0].clientY;
     const delta = touchLastY - currentY;
     touchLastY = currentY;
     if (isAnimating) return;
+    
     touchAccum += delta;
-    while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
+    if (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
         const direction = touchAccum > 0 ? 1 : -1;
         stepIndex(direction);
-        touchAccum -= direction * TOUCH_STEP_DISTANCE;
-        if (isAnimating) {
-            touchAccum = 0;
-            break;
-        }
+        touchAccum = 0;
     }
 }, { passive: true });
 
