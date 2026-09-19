@@ -50,6 +50,7 @@ function showScrollHint() {
     hint.id = 'scroll-hint-popup';
     
     const isMobile = window.innerWidth < 768;
+    // استفاده از آیکون متحرک بصورت SVG بدون متن فارسی
     const iconSvg = isMobile 
         ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceUp 1.5s infinite;"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 11a4 4 0 0 1 4 4v3a6 6 0 0 1-6 6h-2a8 8 0 0 1-5.35-2.02l-2.45-2.22a2 2 0 0 1-.16-2.68l2.16-2.73a2 2 0 0 1 2.82-.22l2.96 2.37"></path></svg>`
         : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceScroll 1.5s infinite;"><rect x="5" y="2" width="14" height="20" rx="7"></rect><line x1="12" y1="6" x2="12" y2="10"></line></svg>`;
@@ -87,6 +88,7 @@ function showScrollHint() {
     `;
     document.body.appendChild(hint);
 
+    // ظاهر شدن پس از ۱ ثانیه
     setTimeout(() => {
         const popup = hint.querySelector('div');
         if (popup) popup.style.opacity = '1';
@@ -537,64 +539,47 @@ renderer.domElement.addEventListener('pointerup', (e) => {
     }
 });
 
-// ---------------------------------------------------------------------------
-// تنظیمات سراسری حساسیت و کنترل اسکرول (ماوس، لمس و کیبورد)
-// ---------------------------------------------------------------------------
-const TOUCH_STEP_DISTANCE = 50; 
-const TOUCH_SENSITIVITY = 1.2;  
-
-let touchLastY = null;
-let touchAccum = 0;
 let wheelCooldown = false;
-
-// مدیریت رویداد اسکرول موس (چرخ موس)
 window.addEventListener('wheel', (e) => {
     e.preventDefault();
     if (isAnimating || wheelCooldown) return;
-
     wheelCooldown = true;
-    setTimeout(() => { wheelCooldown = false; }, 150);
-
+    setTimeout(() => {
+        wheelCooldown = false;
+    }, 150);
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-// مدیریت رویدادهای لمسی موبایل
+const TOUCH_STEP_DISTANCE = 60;
+let touchLastY = null;
+let touchAccum = 0;
+
 window.addEventListener('touchstart', (e) => {
-    if (e.touches.length > 0) {
-        touchLastY = e.touches[0].clientY;
-        touchAccum = 0;
-    }
+    touchLastY = e.touches[0].clientY;
+    touchAccum = 0;
 }, { passive: true });
 
 window.addEventListener('touchmove', (e) => {
-    if (touchLastY === null || isAnimating || e.touches.length === 0) return;
-
+    if (touchLastY === null) return;
     const currentY = e.touches[0].clientY;
-    const delta = (touchLastY - currentY) * TOUCH_SENSITIVITY;
+    const delta = touchLastY - currentY;
     touchLastY = currentY;
-
+    if (isAnimating) return;
     touchAccum += delta;
-
-    if (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
+    while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
         const direction = touchAccum > 0 ? 1 : -1;
         stepIndex(direction);
-        touchAccum = 0; 
+        touchAccum -= direction * TOUCH_STEP_DISTANCE;
+        if (isAnimating) {
+            touchAccum = 0;
+            break;
+        }
     }
 }, { passive: true });
 
 window.addEventListener('touchend', () => {
     touchLastY = null;
     touchAccum = 0;
-});
-
-// کنترل با کیبورد (جهت‌نماهای بالا و پایین / چپ و راست)
-window.addEventListener('keydown', (e) => {
-    if (isAnimating) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-        stepIndex(1);
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-        stepIndex(-1);
-    }
 });
 
 window.addEventListener('resize', () => {
