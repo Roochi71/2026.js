@@ -11,7 +11,10 @@ function updateCameraForViewport() {
 }
 updateCameraForViewport();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({
+    antialias: true,
+    powerPreference: "high-performance"
+});
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
@@ -48,23 +51,16 @@ let hasInteracted = false;
 function showScrollHint() {
     const hint = document.createElement('div');
     hint.id = 'scroll-hint-popup';
-    
     const isMobile = window.innerWidth < 768;
-    // استفاده از آیکون متحرک بصورت SVG بدون متن فارسی
-    const iconSvg = isMobile 
-        ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceUp 1.5s infinite;"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 11a4 4 0 0 1 4 4v3a6 6 0 0 1-6 6h-2a8 8 0 0 1-5.35-2.02l-2.45-2.22a2 2 0 0 1-.16-2.68l2.16-2.73a2 2 0 0 1 2.82-.22l2.96 2.37"></path></svg>`
-        : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceScroll 1.5s infinite;"><rect x="5" y="2" width="14" height="20" rx="7"></rect><line x1="12" y1="6" x2="12" y2="10"></line></svg>`;
-
+    
+    const iconSvg = isMobile ? 
+        `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceUp 1.5s infinite;"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 11a4 4 0 0 1 4 4v3a6 6 0 0 1-6 6h-2a8 8 0 0 1-5.35-2.02l-2.45-2.22a2 2 0 0 1-.16-2.68l2.16-2.73a2 2 0 0 1 2.82-.22l2.96 2.37"></path></svg>` : 
+        `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceScroll 1.5s infinite;"><rect x="5" y="2" width="14" height="20" rx="7"></rect><line x1="12" y1="6" x2="12" y2="10"></line></svg>`;
+    
     hint.innerHTML = `
         <style>
-            @keyframes bounceUp {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(-8px); }
-            }
-            @keyframes bounceScroll {
-                0%, 100% { transform: translateY(0); }
-                50% { transform: translateY(6px); }
-            }
+            @keyframes bounceUp { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+            @keyframes bounceScroll { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(6px); } }
         </style>
         <div style="
             position: fixed;
@@ -86,9 +82,9 @@ function showScrollHint() {
             pointer-events: none;
         ">${iconSvg}</div>
     `;
+    
     document.body.appendChild(hint);
 
-    // ظاهر شدن پس از ۱ ثانیه
     setTimeout(() => {
         const popup = hint.querySelector('div');
         if (popup) popup.style.opacity = '1';
@@ -115,9 +111,9 @@ const loadingManager = new THREE.LoadingManager(
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
             loadingEl.style.opacity = '0';
-            setTimeout(() => { 
-                loadingEl.style.display = 'none'; 
-                showScrollHint(); 
+            setTimeout(() => {
+                loadingEl.style.display = 'none';
+                showScrollHint();
             }, 800);
         } else {
             showScrollHint();
@@ -137,17 +133,11 @@ const loadingManager = new THREE.LoadingManager(
 
 const textureLoader = new THREE.TextureLoader(loadingManager);
 
-const entranceView = {
-    pos: [16.79, 1.32, -0.62],
-    target: [5.00, 1.60, 0.00]
-};
+const entranceView = { pos: [16.79, 1.32, -0.62], target: [5.00, 1.60, 0.00] };
 camera.position.set(...entranceView.pos);
 controls.target.set(...entranceView.target);
 
-const aboutView = {
-    pos: [-10.62, 1.52, -1.09],
-    target: [-5.59, 1.54, -1.33]
-};
+const aboutView = { pos: [-10.62, 1.52, -1.09], target: [-5.59, 1.54, -1.33] };
 
 const ARTWORK_CONFIG = [
     {
@@ -264,9 +254,7 @@ function normalizeName(str) {
 }
 
 const NORMALIZED_TARGETS = ARTWORK_CONFIG.map((a) => normalizeName(a.name));
-
 const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
-
 let artworks = [];
 let currentIndex = -1;
 let isAnimating = false;
@@ -284,7 +272,6 @@ function getWorldNormal(mesh) {
     }
     if (normal.lengthSq() < 1e-6) normal.set(0, 0, 1);
     normal.normalize();
-
     const normalMatrix = new THREE.Matrix3().getNormalMatrix(mesh.matrixWorld);
     return normal.applyMatrix3(normalMatrix).normalize();
 }
@@ -292,7 +279,6 @@ function getWorldNormal(mesh) {
 function computeViewpointForArtwork(art) {
     const override = art.config.override;
     if (override) return { pos: [...override.pos], target: [...override.target] };
-
     const standOffset = 1.2;
     const pos = art.worldCenter.clone().addScaledVector(art.normal, standOffset);
     return {
@@ -310,7 +296,6 @@ function computeOutwardDirection(art, viewpoint) {
 
 function applyCustomImage(art, url) {
     const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
-
     textureLoader.load(
         url,
         (texture) => {
@@ -318,21 +303,17 @@ function applyCustomImage(art, url) {
                 texture.dispose();
                 return;
             }
-
             texture.encoding = THREE.sRGBEncoding;
-
             if (art.imageMesh) {
                 scene.remove(art.imageMesh);
                 art.imageMesh.geometry.dispose();
                 art.imageMesh.material.map?.dispose();
                 art.imageMesh.material.dispose();
             }
-
             const outward = art.outwardDir;
             const manual = art.config.size || {};
             const width = manual.width || 0.5;
             const height = manual.height || 0.7;
-
             const dist = manual.dist !== undefined ? manual.dist : 0.03;
             const offsetX = manual.offsetX || 0;
             const offsetY = manual.offsetY || 0;
@@ -351,8 +332,8 @@ function applyCustomImage(art, url) {
             planeMesh.position.addScaledVector(outward, dist);
             planeMesh.position.addScaledVector(right, offsetX);
             planeMesh.position.addScaledVector(up, offsetY);
-            planeMesh.lookAt(art.worldCenter.clone().add(outward));
 
+            planeMesh.lookAt(art.worldCenter.clone().add(outward));
             if (manual.degX) planeMesh.rotation.x += THREE.MathUtils.degToRad(manual.degX);
             if (manual.degY) planeMesh.rotation.y += THREE.MathUtils.degToRad(manual.degY);
             if (manual.degZ) planeMesh.rotation.z += THREE.MathUtils.degToRad(manual.degZ);
@@ -385,10 +366,8 @@ loader.load(
         const foundMeshes = {};
         model.traverse((child) => {
             if (!child.isMesh) return;
-
             const candidates = [normalizeName(child.name)];
             if (child.parent?.name) candidates.push(normalizeName(child.parent.name));
-
             for (const candidate of candidates) {
                 const idx = NORMALIZED_TARGETS.indexOf(candidate);
                 if (idx !== -1 && !foundMeshes[NORMALIZED_TARGETS[idx]]) {
@@ -401,14 +380,17 @@ loader.load(
             .map((config, i) => {
                 const mesh = foundMeshes[NORMALIZED_TARGETS[i]];
                 if (!mesh) return null;
-
                 const nodePos = new THREE.Vector3();
                 mesh.getWorldPosition(nodePos);
-
                 const boxCenter = new THREE.Box3().setFromObject(mesh).getCenter(new THREE.Vector3());
                 const worldCenter = nodePos.length() < 0.5 ? boxCenter : nodePos;
-
-                return { name: config.name, config, mesh, worldCenter, normal: getWorldNormal(mesh) };
+                return {
+                    name: config.name,
+                    config,
+                    mesh,
+                    worldCenter,
+                    normal: getWorldNormal(mesh)
+                };
             })
             .filter(Boolean);
 
@@ -434,16 +416,22 @@ loader.load(
 function flyTo(viewpoint, onArrive) {
     isAnimating = true;
     gsap.to(camera.position, {
-        x: viewpoint.pos[0], y: viewpoint.pos[1], z: viewpoint.pos[2],
-        duration: 2.8, ease: "power2.inOut",
+        x: viewpoint.pos[0],
+        y: viewpoint.pos[1],
+        z: viewpoint.pos[2],
+        duration: 2.8,
+        ease: "power2.inOut",
         onComplete: () => {
             isAnimating = false;
             if (onArrive) onArrive();
         }
     });
     gsap.to(controls.target, {
-        x: viewpoint.target[0], y: viewpoint.target[1], z: viewpoint.target[2],
-        duration: 2.0, ease: "power2.inOut",
+        x: viewpoint.target[0],
+        y: viewpoint.target[1],
+        z: viewpoint.target[2],
+        duration: 2.0,
+        ease: "power2.inOut",
         onUpdate: () => controls.update()
     });
 }
@@ -451,7 +439,6 @@ function flyTo(viewpoint, onArrive) {
 function updateAboutPanel(index) {
     const aboutPanel = document.getElementById('about-me-panel');
     if (!aboutPanel) return;
-
     if (index === artworks.length) {
         aboutPanel.innerHTML = `
             <h3 class="name">Your Company Name</h3>
@@ -487,9 +474,7 @@ function updateAboutPanel(index) {
 function goToIndex(index) {
     if (isAnimating || index < -1 || index > artworks.length || index === currentIndex) return;
     if (Math.abs(index - currentIndex) > 1) return;
-
     currentIndex = index;
-
     controls.enableRotate = false;
     controls.minAzimuthAngle = -Infinity;
     controls.maxAzimuthAngle = Infinity;
@@ -506,7 +491,6 @@ function goToIndex(index) {
             controls.maxAzimuthAngle = art.baseAzimuth + ARTWORK_AZIMUTH_RANGE;
         });
     }
-
     updateAboutPanel(index);
 }
 
@@ -544,9 +528,7 @@ window.addEventListener('wheel', (e) => {
     e.preventDefault();
     if (isAnimating || wheelCooldown) return;
     wheelCooldown = true;
-    setTimeout(() => {
-        wheelCooldown = false;
-    }, 150);
+    setTimeout(() => { wheelCooldown = false; }, 150);
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
@@ -564,8 +546,10 @@ window.addEventListener('touchmove', (e) => {
     const currentY = e.touches[0].clientY;
     const delta = touchLastY - currentY;
     touchLastY = currentY;
+
     if (isAnimating) return;
     touchAccum += delta;
+
     while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
         const direction = touchAccum > 0 ? 1 : -1;
         stepIndex(direction);
