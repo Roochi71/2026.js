@@ -13,9 +13,11 @@ function updateCameraForViewport() {
 }
 updateCameraForViewport();
 
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 800;
+
+const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
@@ -43,30 +45,24 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
+// Real loading screen: hides only after the 3D model has actually loaded
 // ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
 const percentEl = document.getElementById('loading-percent');
 const loadingEl = document.getElementById('loading');
 
-let currentPercent = 0;
-const loadingInterval = setInterval(() => {
-    currentPercent += 5;
-    if (currentPercent > 100) currentPercent = 100;
-    if (percentEl) percentEl.innerText = currentPercent + '%';
-
-    if (currentPercent === 100) {
-        clearInterval(loadingInterval);
-        if (loadingEl) {
-            loadingEl.style.opacity = '0';
-            setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
-        }
+let loadingHidden = false;
+function hideLoading() {
+    if (loadingHidden) return;
+    loadingHidden = true;
+    if (loadingEl) {
+        loadingEl.style.opacity = '0';
+        setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
     }
-}, 100);
+}
 
 loadingManager.onError = (url) => {
     console.error('خطا در بارگذاری فایل:', url);
-    if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
 };
 
 const textureLoader = new THREE.TextureLoader(loadingManager);
@@ -364,10 +360,20 @@ loader.load(
         artworks.forEach((art) => {
             if (art.config.image) applyCustomImage(art, art.config.image);
         });
+
+        hideLoading();
     },
-    undefined,
+    (xhr) => {
+        if (!percentEl) return;
+        if (xhr.lengthComputable && xhr.total > 0) {
+            percentEl.innerText = Math.round((xhr.loaded / xhr.total) * 100) + '%';
+        } else {
+            percentEl.innerText = (xhr.loaded / 1048576).toFixed(1) + ' MB';
+        }
+    },
     (error) => {
         console.error('خطا در بارگذاری مدل:', error);
+        if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
     }
 );
 
