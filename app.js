@@ -21,6 +21,18 @@ renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
 document.body.appendChild(renderer.domElement);
 
+// ---------------------------------------------------------------------------
+// DEBUG: on-screen log (green text at top-left). Remove this block when done.
+// ---------------------------------------------------------------------------
+const dbg = document.createElement('pre');
+dbg.style.cssText = 'position:fixed;top:0;left:0;z-index:99999;margin:0;padding:6px;font:10px monospace;color:#0f0;background:rgba(0,0,0,.75);max-width:100vw;white-space:pre-wrap;pointer-events:none';
+document.body.appendChild(dbg);
+function log(msg) { dbg.textContent += msg + '\n'; }
+window.addEventListener('error', (e) => log('ERR: ' + e.message));
+window.addEventListener('unhandledrejection', (e) => log('REJ: ' + (e.reason && e.reason.message || e.reason)));
+renderer.domElement.addEventListener('webglcontextlost', () => log('WEBGL CONTEXT LOST'));
+log('maxTex=' + renderer.capabilities.maxTextureSize + ' dpr=' + window.devicePixelRatio);
+
 const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
@@ -263,6 +275,7 @@ function applyCustomImage(art, url) {
             }
 
             texture.encoding = THREE.sRGBEncoding;
+            log('img ' + url + ' ' + texture.image.width + 'x' + texture.image.height);
 
             if (art.imageMesh) {
                 scene.remove(art.imageMesh);
@@ -321,6 +334,26 @@ loader.load(
         }
 
         model.updateMatrixWorld(true);
+
+        // DEBUG: report GLB texture sizes
+        let texCount = 0, totalMB = 0;
+        const seenTex = new Set();
+        model.traverse((c) => {
+            if (!c.isMesh) return;
+            [].concat(c.material).forEach((m) => {
+                for (const k in m) {
+                    const t = m[k];
+                    if (t && t.isTexture && t.image && !seenTex.has(t)) {
+                        seenTex.add(t);
+                        const w = t.image.width, h = t.image.height;
+                        texCount++;
+                        totalMB += (w * h * 4 * 1.33) / 1048576;
+                        if (w > 2048 || h > 2048) log(k + ' ' + w + 'x' + h);
+                    }
+                }
+            });
+        });
+        log('GLB textures: ' + texCount + ' ~' + Math.round(totalMB) + 'MB');
 
         const foundMeshes = {};
         model.traverse((child) => {
