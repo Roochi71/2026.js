@@ -41,14 +41,73 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// لودینگ واقعی بر اساس پیشرفت بارگذاری فایل‌ها
+// لودینگ واقعی و نمایش اخطار راهنما پس از ۱ ثانیه از لود کامل
 // ---------------------------------------------------------------------------
+let hasInteracted = false;
+
+function showScrollHint() {
+    const hint = document.createElement('div');
+    hint.id = 'scroll-hint-popup';
+    
+    // تشخیص متن مناسب بر اساس دستگاه
+    const isMobile = window.innerWidth < 768;
+    const hintText = isMobile ? 'برای دیدن عکس بعدی، صفحه را با دست به بالا بکشید 👆' : 'برای دیدن عکس بعدی، با موس اسکرول کنید 🖱️';
+    
+    hint.innerHTML = `
+        <div style="
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-family: Tahoma, sans-serif;
+            font-size: 13px;
+            z-index: 9999;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.15);
+            transition: opacity 0.5s ease;
+            opacity: 0;
+            pointer-events: none;
+        ">${hintText}</div>
+    `;
+    document.body.appendChild(hint);
+
+    // ظاهر شدن پس از ۱ ثانیه
+    setTimeout(() => {
+        const popup = hint.querySelector('div');
+        if (popup) popup.style.opacity = '1';
+    }, 1000);
+
+    // تابع مخفی کردن با اولین تعامل
+    const dismissHint = () => {
+        if (hasInteracted) return;
+        hasInteracted = true;
+        const popup = hint.querySelector('div');
+        if (popup) {
+            popup.style.opacity = '0';
+            setTimeout(() => hint.remove(), 500);
+        }
+        window.removeEventListener('wheel', dismissHint);
+        window.removeEventListener('touchstart', dismissHint);
+    };
+
+    window.addEventListener('wheel', dismissHint, { once: true });
+    window.addEventListener('touchstart', dismissHint, { once: true });
+}
+
 const loadingManager = new THREE.LoadingManager(
     () => {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
             loadingEl.style.opacity = '0';
-            setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
+            setTimeout(() => { 
+                loadingEl.style.display = 'none'; 
+                showScrollHint(); // اجرای اخطار ۱ ثانیه پس از محو شدن لودینگ
+            }, 800);
+        } else {
+            showScrollHint();
         }
     },
     (url, itemsLoaded, itemsTotal) => {
@@ -293,9 +352,7 @@ function applyCustomImage(art, url) {
     );
 }
 
-// ---------------------------------------------------------------------------
-// تشخیص خودکار دستگاه (موبایل یا دسکتاپ/لپ‌تاپ/آیپد) برای انتخاب فایل GLB
-// ---------------------------------------------------------------------------
+// انتخاب فایل مدل بر اساس نوع دستگاه
 const isMobilePhone = window.innerWidth < 768 && /Mobi|Android|iPhone/i.test(navigator.userAgent);
 const selectedModelFile = isMobilePhone ? 'room3-small.glb' : 'room3.glb';
 
