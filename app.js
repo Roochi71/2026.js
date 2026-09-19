@@ -43,31 +43,29 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
+// لودینگ واقعی بر اساس پیشرفت بارگذاری فایل‌ها (مدل و تصاویر)
 // ---------------------------------------------------------------------------
-const loadingManager = new THREE.LoadingManager();
-const percentEl = document.getElementById('loading-percent');
-const loadingEl = document.getElementById('loading');
-
-let currentPercent = 0;
-const loadingInterval = setInterval(() => {
-    currentPercent += 5;
-    if (currentPercent > 100) currentPercent = 100;
-    if (percentEl) percentEl.innerText = currentPercent + '%';
-
-    if (currentPercent === 100) {
-        clearInterval(loadingInterval);
+const loadingManager = new THREE.LoadingManager(
+    () => {
+        // پس از اتمام کامل لودینگ
+        const loadingEl = document.getElementById('loading');
         if (loadingEl) {
             loadingEl.style.opacity = '0';
             setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
         }
+    },
+    (url, itemsLoaded, itemsTotal) => {
+        // محاسبه و نمایش درصد واقعی پیشرفت
+        const percentEl = document.getElementById('loading-percent');
+        const progress = Math.round((itemsLoaded / itemsTotal) * 100);
+        if (percentEl) percentEl.innerText = progress + '%';
+    },
+    (url) => {
+        console.error('خطا در بارگذاری فایل:', url);
+        const percentEl = document.getElementById('loading-percent');
+        if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
     }
-}, 100);
-
-loadingManager.onError = (url) => {
-    console.error('خطا در بارگذاری فایل:', url);
-    if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
-};
+);
 
 const textureLoader = new THREE.TextureLoader(loadingManager);
 
@@ -249,15 +247,12 @@ function computeOutwardDirection(art, viewpoint) {
 }
 
 function applyCustomImage(art, url) {
-    // Tag each load request so a late-arriving older request can't clobber
-    // a newer one if the user flips between artworks quickly.
     const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
 
     textureLoader.load(
         url,
         (texture) => {
             if (art.imageRequestId !== requestId) {
-                // A newer load for this artwork started after this one — discard.
                 texture.dispose();
                 return;
             }
@@ -490,9 +485,6 @@ window.addEventListener('wheel', (e) => {
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-// Distance (px) the finger needs to travel to advance one artwork.
-// Tracking is continuous via touchmove instead of only comparing
-// start/end points, so the gesture feels live instead of laggy.
 const TOUCH_STEP_DISTANCE = 60;
 let touchLastY = null;
 let touchAccum = 0;
@@ -506,10 +498,10 @@ window.addEventListener('touchmove', (e) => {
     if (touchLastY === null) return;
 
     const currentY = e.touches[0].clientY;
-    const delta = touchLastY - currentY; // swipe up (finger moves up) -> positive -> go forward
+    const delta = touchLastY - currentY;
     touchLastY = currentY;
 
-    if (isAnimating) return; // camera is mid fly-to; ignore extra input until it settles
+    if (isAnimating) return;
 
     touchAccum += delta;
     while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
@@ -517,7 +509,7 @@ window.addEventListener('touchmove', (e) => {
         stepIndex(direction);
         touchAccum -= direction * TOUCH_STEP_DISTANCE;
         if (isAnimating) {
-            touchAccum = 0; // an animation just started; wait for it before stepping again
+            touchAccum = 0;
             break;
         }
     }
