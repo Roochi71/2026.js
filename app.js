@@ -106,8 +106,47 @@ function showScrollHint() {
     window.addEventListener('touchstart', dismissHint, { once: true });
 }
 
-const loadingManager = new THREE.LoadingManager(
-    () => {
+// ---------------------------------------------------------------------------
+// سیستم لودینگ: درصد از ۰ تا ۱۰۰ به‌صورت نرم و بدون برگشت به عقب
+//   ۰ تا ۸۰  : دانلود فایل glb (بر اساس بایت‌های واقعی)
+//   ۸۰ تا ۸۵ : پردازش مدل (آهسته جلو می‌رود)
+//   ۸۵ تا ۹۹ : لود عکس‌های آثار
+//   ۱۰۰      : همه‌چیز آماده است → سایت اجرا می‌شود
+// ---------------------------------------------------------------------------
+const loadState = {
+    modelBytes: 0,          // نسبت دانلود glb (0 تا 1)
+    downloadDoneAt: 0,      // زمان پایان دانلود
+    modelParsed: false,     // مدل کامل پردازش شد
+    imagesTotal: 0,
+    imagesDone: 0,
+    allLoaded: false,       // LoadingManager همه‌چیز را تمام‌شده اعلام کرد
+    failed: false           // خطا در لود یکی از فایل‌ها
+};
+let displayedPercent = 0;
+let loadingFinished = false;
+
+function getTargetPercent() {
+    if (loadState.allLoaded) return 100;
+
+    let target;
+    if (!loadState.modelParsed) {
+        target = Math.min(loadState.modelBytes, 1) * 80;
+        if (loadState.downloadDoneAt) {
+            const sec = (performance.now() - loadState.downloadDoneAt) / 1000;
+            target += Math.min(4, sec * 0.8);
+        }
+    } else if (loadState.imagesTotal === 0) {
+        target = 85;
+    } else {
+        target = 85 + Math.min(1, loadState.imagesDone / loadState.imagesTotal) * 14;
+    }
+    return Math.min(99, target);
+}
+
+function finishLoading() {
+    if (loadingFinished) return;
+    loadingFinished = true;
+    setTimeout(() => {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
             loadingEl.style.opacity = '0';
@@ -118,18 +157,44 @@ const loadingManager = new THREE.LoadingManager(
         } else {
             showScrollHint();
         }
+    }, 250);
+}
+
+function updateLoadingUI() {
+    if (loadingFinished) return;
+
+    const target = getTargetPercent();
+    if (displayedPercent < target) {
+        const step = Math.max((target - displayedPercent) * 0.08, 0.15);
+        displayedPercent = Math.min(target, displayedPercent + step);
+    }
+
+    const percentEl = document.getElementById('loading-percent');
+    if (percentEl && !loadState.failed) {
+        percentEl.innerText = Math.floor(displayedPercent) + '%';
+    }
+
+    if (loadState.allLoaded && displayedPercent >= 100) {
+        finishLoading();
+        return;
+    }
+    requestAnimationFrame(updateLoadingUI);
+}
+
+const loadingManager = new THREE.LoadingManager(
+    () => {
+        loadState.allLoaded = true;
     },
-    (url, itemsLoaded, itemsTotal) => {
-        const percentEl = document.getElementById('loading-percent');
-        const progress = Math.round((itemsLoaded / itemsTotal) * 100);
-        if (percentEl) percentEl.innerText = progress + '%';
-    },
+    undefined,
     (url) => {
         console.error('Error loading file:', url);
+        loadState.failed = true;
         const percentEl = document.getElementById('loading-percent');
         if (percentEl) percentEl.innerText = 'Loading Error';
     }
 );
+
+updateLoadingUI();
 
 const textureLoader = new THREE.TextureLoader(loadingManager);
 
@@ -299,6 +364,7 @@ function applyCustomImage(art, url) {
     textureLoader.load(
         url,
         (texture) => {
+            loadState.imagesDone++;
             if (art.imageRequestId !== requestId) {
                 texture.dispose();
                 return;
@@ -342,7 +408,10 @@ function applyCustomImage(art, url) {
             art.imageMesh = planeMesh;
         },
         undefined,
-        (err) => console.error(`Error loading image ${url}:`, err)
+        (err) => {
+            loadState.imagesDone++;
+            console.error(`Error loading image ${url}:`, err);
+        }
     );
 }
 
@@ -353,6 +422,8 @@ const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
     selectedModelFile,
     (gltf) => {
+        loadState.modelParsed = true;
+
         const model = gltf.scene;
         scene.add(model);
 
@@ -403,11 +474,23 @@ loader.load(
             art.baseAzimuth = Math.atan2(offset.x, offset.z);
         });
 
+        loadState.imagesTotal = artworks.filter((art) => art.config.image).length;
+
         artworks.forEach((art) => {
             if (art.config.image) applyCustomImage(art, art.config.image);
         });
     },
-    undefined,
+    (xhr) => {
+        if (xhr.lengthComputable && xhr.total > 0) {
+            loadState.modelBytes = Math.min(1, xhr.loaded / xhr.total);
+        } else {
+            // اگر سرور حجم کل را نفرستاد، تخمین نرم بر اساس بایت‌های دریافتی
+            loadState.modelBytes = 1 - Math.exp(-xhr.loaded / (25 * 1024 * 1024));
+        }
+        if (loadState.modelBytes >= 1 && !loadState.downloadDoneAt) {
+            loadState.downloadDoneAt = performance.now();
+        }
+    },
     (error) => {
         console.error('Error loading model:', error);
     }
