@@ -244,14 +244,70 @@ function computeOutwardDirection(art, viewpoint) {
     return dir.normalize();
 }
 
+// Mobile browsers run out of memory (page reloads / black screen) when
+// full-size photos and baked textures are decoded, so shrink them first.
+const MAX_MODEL_TEX = isMobile ? 1024 : 4096;
+const MAX_GALLERY_TEX = isMobile ? 1024 : 2048;
+
+function downscaleImage(img, maxSize) {
+    const w = img.width || img.naturalWidth;
+    const h = img.height || img.naturalHeight;
+    if (!w || !h) return img;
+
+    const scale = Math.min(1, maxSize / Math.max(w, h));
+    if (scale >= 1) return img;
+
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(w * scale));
+    canvas.height = Math.max(1, Math.round(h * scale));
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    if (typeof img.close === 'function') img.close();
+    return canvas;
+}
+
+function downscaleModelTextures(model) {
+    const seen = new Set();
+    model.traverse((child) => {
+        if (!child.isMesh || !child.material) return;
+        const mats = Array.isArray(child.material) ? child.material : [child.material];
+        mats.forEach((mat) => {
+            for (const key in mat) {
+                const tex = mat[key];
+                if (tex && tex.isTexture && tex.image && !seen.has(tex)) {
+                    seen.add(tex);
+                    const small = downscaleImage(tex.image, MAX_MODEL_TEX);
+                    if (small !== tex.image) {
+                        tex.image = small;
+                        tex.needsUpdate = true;
+                    }
+                }
+            }
+        });
+    });
+}
+
+function loadGalleryTexture(url) {
+    return new Promise((resolve, reject) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => {
+            const texture = new THREE.Texture(downscaleImage(img, MAX_GALLERY_TEX));
+            texture.encoding = THREE.sRGBEncoding;
+            texture.needsUpdate = true;
+            resolve(texture);
+        };
+        img.onerror = () => reject(new Error('Image failed to load: ' + url));
+        img.src = url;
+    });
+}
+
 function applyCustomImage(art, url) {
     // Tag each load request so a late-arriving older request can't clobber
     // a newer one if the user flips between artworks quickly.
     const requestId = (art.imageRequestId = (art.imageRequestId || 0) + 1);
 
-    textureLoader.load(
-        url,
-        (texture) => {
+    return new Promise((resolve) => {
+        loadGalleryTexture(url).then((texture) => {
             if (art.imageRequestId !== requestId) {
                 // A newer load for this artwork started after this one — discard.
                 texture.dispose();
@@ -298,10 +354,10 @@ function applyCustomImage(art, url) {
 
             scene.add(planeMesh);
             art.imageMesh = planeMesh;
-        },
-        undefined,
-        (err) => console.error(`خطا در بارگذاری تصویر ${url}:`, err)
-    );
+        }).catch((err) => {
+            console.error(`خطا در بارگذاری تصویر ${url}:`, err);
+        }).then(resolve);
+    });
 }
 
 const loader = new THREE.GLTFLoader(loadingManager);
@@ -316,6 +372,7 @@ loader.load(
             gltf.animations.forEach((clip) => mixer.clipAction(clip).play());
         }
 
+        downscaleModelTextures(model);
         model.updateMatrixWorld(true);
 
         const foundMeshes = {};
@@ -357,16 +414,21 @@ loader.load(
             art.baseAzimuth = Math.atan2(offset.x, offset.z);
         });
 
-        artworks.forEach((art) => {
-            if (art.config.image) applyCustomImage(art, art.config.image);
-        });
-
-        hideLoading();
+        (async () => {
+            const withImages = artworks.filter((a) => a.config.image);
+            for (let i = 0; i < withImages.length; i++) {
+                await applyCustomImage(withImages[i], withImages[i].config.image);
+                if (percentEl) {
+                    percentEl.innerText = Math.round(90 + (10 * (i + 1)) / withImages.length) + '%';
+                }
+            }
+            hideLoading();
+        })();
     },
     (xhr) => {
         if (!percentEl) return;
         if (xhr.lengthComputable && xhr.total > 0) {
-            percentEl.innerText = Math.round((xhr.loaded / xhr.total) * 100) + '%';
+            percentEl.innerText = Math.round((xhr.loaded / xhr.total) * 90) + '%';
         } else {
             percentEl.innerText = (xhr.loaded / 1048576).toFixed(1) + ' MB';
         }
