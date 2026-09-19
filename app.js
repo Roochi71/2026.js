@@ -3,8 +3,6 @@ scene.background = new THREE.Color(0x0b0b0b);
 
 const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
-// On narrow/portrait screens (most phones) a 60° FOV crops the room too
-// tightly. Widen it automatically so more of the scene stays in frame.
 function updateCameraForViewport() {
     const aspect = window.innerWidth / window.innerHeight;
     camera.aspect = aspect;
@@ -43,11 +41,10 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// لودینگ واقعی بر اساس پیشرفت بارگذاری فایل‌ها (مدل و تصاویر)
+// لودینگ واقعی بر اساس پیشرفت بارگذاری فایل‌ها
 // ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager(
     () => {
-        // پس از اتمام کامل لودینگ
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
             loadingEl.style.opacity = '0';
@@ -55,7 +52,6 @@ const loadingManager = new THREE.LoadingManager(
         }
     },
     (url, itemsLoaded, itemsTotal) => {
-        // محاسبه و نمایش درصد واقعی پیشرفت
         const percentEl = document.getElementById('loading-percent');
         const progress = Math.round((itemsLoaded / itemsTotal) * 100);
         if (percentEl) percentEl.innerText = progress + '%';
@@ -81,12 +77,6 @@ const aboutView = {
     target: [-5.59, 1.54, -1.33]
 };
 
-// ---------------------------------------------------------------------------
-// Unified per-artwork configuration
-// (replaces EXACT_ARTWORK_NAMES + CUSTOM_IMAGES + CUSTOM_IMAGE_SIZE + MANUAL_OVERRIDES)
-// Each artwork now lives in exactly one place, keyed once — no repeated name
-// strings across four separate objects.
-// ---------------------------------------------------------------------------
 const ARTWORK_CONFIG = [
     {
         name: "jake and london eye_london eye manual bake_0",
@@ -303,9 +293,15 @@ function applyCustomImage(art, url) {
     );
 }
 
+// ---------------------------------------------------------------------------
+// تشخیص خودکار دستگاه (موبایل یا دسکتاپ/لپ‌تاپ/آیپد) برای انتخاب فایل GLB
+// ---------------------------------------------------------------------------
+const isMobilePhone = window.innerWidth < 768 && /Mobi|Android|iPhone/i.test(navigator.userAgent);
+const selectedModelFile = isMobilePhone ? 'room3-small.glb' : 'room3.glb';
+
 const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
-    'room3-small.glb',
+    selectedModelFile,
     (gltf) => {
         const model = gltf.scene;
         scene.add(model);
