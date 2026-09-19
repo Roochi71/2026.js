@@ -64,7 +64,7 @@ function showScrollHint() {
         </style>
         <div style="
             position: fixed;
-            bottom: 30px;
+            bottom: ${isMobile ? 100 : 30}px;
             right: 30px;
             background: rgba(0, 0, 0, 0.85);
             color: #fff;
