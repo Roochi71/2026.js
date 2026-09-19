@@ -13,11 +13,9 @@ function updateCameraForViewport() {
 }
 updateCameraForViewport();
 
-const isMobile = /Android|iPhone|iPad/i.test(navigator.userAgent) || window.innerWidth < 800;
-
-const renderer = new THREE.WebGLRenderer({ antialias: !isMobile, powerPreference: "high-performance" });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, isMobile ? 1.5 : 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.outputEncoding = THREE.sRGBEncoding;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.25;
@@ -45,21 +43,26 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// Real loading screen: hides only after the 3D model has actually loaded
+// لودینگ دقیقاً ۲ ثانیه‌ای (جایگزین لودینگ سنگین قبلی بر اساس درخواست شما)
 // ---------------------------------------------------------------------------
 const loadingManager = new THREE.LoadingManager();
 const percentEl = document.getElementById('loading-percent');
 const loadingEl = document.getElementById('loading');
 
-let loadingHidden = false;
-function hideLoading() {
-    if (loadingHidden) return;
-    loadingHidden = true;
-    if (loadingEl) {
-        loadingEl.style.opacity = '0';
-        setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
+let currentPercent = 0;
+const loadingInterval = setInterval(() => {
+    currentPercent += 5;
+    if (currentPercent > 100) currentPercent = 100;
+    if (percentEl) percentEl.innerText = currentPercent + '%';
+
+    if (currentPercent === 100) {
+        clearInterval(loadingInterval);
+        if (loadingEl) {
+            loadingEl.style.opacity = '0';
+            setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
+        }
     }
-}
+}, 100);
 
 loadingManager.onError = (url) => {
     console.error('خطا در بارگذاری فایل:', url);
@@ -307,7 +310,7 @@ function applyCustomImage(art, url) {
 
 const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
-    'room3-small.glb',
+    'room3.glb',
     (gltf) => {
         const model = gltf.scene;
         scene.add(model);
@@ -361,17 +364,10 @@ loader.load(
         artworks.forEach((art) => {
             if (art.config.image) applyCustomImage(art, art.config.image);
         });
-
-        hideLoading();
     },
-    (xhr) => {
-        if (percentEl && xhr.lengthComputable) {
-            percentEl.innerText = Math.round((xhr.loaded / xhr.total) * 100) + '%';
-        }
-    },
+    undefined,
     (error) => {
         console.error('خطا در بارگذاری مدل:', error);
-        if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
     }
 );
 
