@@ -41,14 +41,86 @@ let mixer;
 const clock = new THREE.Clock();
 
 // ---------------------------------------------------------------------------
-// لودینگ واقعی بر اساس پیشرفت بارگذاری فایل‌ها
+// نمایش اخطار راهنما به صورت آیکون (ماوس برای دسکتاپ و دست برای موبایل)
 // ---------------------------------------------------------------------------
+let hasInteracted = false;
+
+function showScrollHint() {
+    const hint = document.createElement('div');
+    hint.id = 'scroll-hint-popup';
+    
+    const isMobile = window.innerWidth < 768;
+    // استفاده از آیکون متحرک بصورت SVG بدون متن فارسی
+    const iconSvg = isMobile 
+        ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceUp 1.5s infinite;"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 11a4 4 0 0 1 4 4v3a6 6 0 0 1-6 6h-2a8 8 0 0 1-5.35-2.02l-2.45-2.22a2 2 0 0 1-.16-2.68l2.16-2.73a2 2 0 0 1 2.82-.22l2.96 2.37"></path></svg>`
+        : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceScroll 1.5s infinite;"><rect x="5" y="2" width="14" height="20" rx="7"></rect><line x1="12" y1="6" x2="12" y2="10"></line></svg>`;
+
+    hint.innerHTML = `
+        <style>
+            @keyframes bounceUp {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(-8px); }
+            }
+            @keyframes bounceScroll {
+                0%, 100% { transform: translateY(0); }
+                50% { transform: translateY(6px); }
+            }
+        </style>
+        <div style="
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            background: rgba(0, 0, 0, 0.85);
+            color: #fff;
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.2);
+            transition: opacity 0.5s ease;
+            opacity: 0;
+            pointer-events: none;
+        ">${iconSvg}</div>
+    `;
+    document.body.appendChild(hint);
+
+    // ظاهر شدن پس از ۱ ثانیه
+    setTimeout(() => {
+        const popup = hint.querySelector('div');
+        if (popup) popup.style.opacity = '1';
+    }, 1000);
+
+    const dismissHint = () => {
+        if (hasInteracted) return;
+        hasInteracted = true;
+        const popup = hint.querySelector('div');
+        if (popup) {
+            popup.style.opacity = '0';
+            setTimeout(() => hint.remove(), 500);
+        }
+        window.removeEventListener('wheel', dismissHint);
+        window.removeEventListener('touchstart', dismissHint);
+    };
+
+    window.addEventListener('wheel', dismissHint, { once: true });
+    window.addEventListener('touchstart', dismissHint, { once: true });
+}
+
 const loadingManager = new THREE.LoadingManager(
     () => {
         const loadingEl = document.getElementById('loading');
         if (loadingEl) {
             loadingEl.style.opacity = '0';
-            setTimeout(() => { loadingEl.style.display = 'none'; }, 800);
+            setTimeout(() => { 
+                loadingEl.style.display = 'none'; 
+                showScrollHint(); 
+            }, 800);
+        } else {
+            showScrollHint();
         }
     },
     (url, itemsLoaded, itemsTotal) => {
@@ -57,9 +129,9 @@ const loadingManager = new THREE.LoadingManager(
         if (percentEl) percentEl.innerText = progress + '%';
     },
     (url) => {
-        console.error('خطا در بارگذاری فایل:', url);
+        console.error('Error loading file:', url);
         const percentEl = document.getElementById('loading-percent');
-        if (percentEl) percentEl.innerText = 'خطا در بارگذاری';
+        if (percentEl) percentEl.innerText = 'Loading Error';
     }
 );
 
@@ -289,13 +361,10 @@ function applyCustomImage(art, url) {
             art.imageMesh = planeMesh;
         },
         undefined,
-        (err) => console.error(`خطا در بارگذاری تصویر ${url}:`, err)
+        (err) => console.error(`Error loading image ${url}:`, err)
     );
 }
 
-// ---------------------------------------------------------------------------
-// تشخیص خودکار دستگاه (موبایل یا دسکتاپ/لپ‌تاپ/آیپد) برای انتخاب فایل GLB
-// ---------------------------------------------------------------------------
 const isMobilePhone = window.innerWidth < 768 && /Mobi|Android|iPhone/i.test(navigator.userAgent);
 const selectedModelFile = isMobilePhone ? 'room3-small.glb' : 'room3.glb';
 
@@ -358,7 +427,7 @@ loader.load(
     },
     undefined,
     (error) => {
-        console.error('خطا در بارگذاری مدل:', error);
+        console.error('Error loading model:', error);
     }
 );
 
