@@ -46,11 +46,11 @@ const clock = new THREE.Clock();
 let hasInteracted = false;
 
 function showScrollHint() {
-    if (document.getElementById('scroll-hint-popup')) return;
     const hint = document.createElement('div');
     hint.id = 'scroll-hint-popup';
     
     const isMobile = window.innerWidth < 768;
+    // استفاده از آیکون متحرک بصورت SVG بدون متن فارسی
     const iconSvg = isMobile 
         ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceUp 1.5s infinite;"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 11a4 4 0 0 1 4 4v3a6 6 0 0 1-6 6h-2a8 8 0 0 1-5.35-2.02l-2.45-2.22a2 2 0 0 1-.16-2.68l2.16-2.73a2 2 0 0 1 2.82-.22l2.96 2.37"></path></svg>`
         : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceScroll 1.5s infinite;"><rect x="5" y="2" width="14" height="20" rx="7"></rect><line x1="12" y1="6" x2="12" y2="10"></line></svg>`;
@@ -88,6 +88,7 @@ function showScrollHint() {
     `;
     document.body.appendChild(hint);
 
+    // ظاهر شدن پس از ۱ ثانیه
     setTimeout(() => {
         const popup = hint.querySelector('div');
         if (popup) popup.style.opacity = '1';
@@ -109,66 +110,28 @@ function showScrollHint() {
     window.addEventListener('touchstart', dismissHint, { once: true });
 }
 
-// ---------------------------------------------------------------------------
-// لودر پیشرفته و روان (Smooth Progress Simulator)
-// ---------------------------------------------------------------------------
-let currentPercent = 0;
-let targetPercent = 0;
-let isLoaded = false;
-
-const progressInterval = setInterval(() => {
-    if (isLoaded) {
-        targetPercent = 100;
-    } else {
-        if (targetPercent < 95) {
-            targetPercent += Math.floor(Math.random() * 3) + 1;
-            if (targetPercent > 95) targetPercent = 95;
-        }
-    }
-
-    currentPercent += (targetPercent - currentPercent) * 0.1;
-    
-    const percentEl = document.getElementById('loading-percent');
-    if (percentEl) {
-        percentEl.innerText = Math.round(currentPercent) + '%';
-    }
-
-    if (isLoaded && Math.round(currentPercent) >= 100) {
-        clearInterval(progressInterval);
-    }
-}, 40);
-
 const loadingManager = new THREE.LoadingManager(
     () => {
-        isLoaded = true;
-        
-        const checkComplete = setInterval(() => {
-            if (Math.round(currentPercent) >= 100) {
-                clearInterval(checkComplete);
-                const loadingEl = document.getElementById('loading');
-                if (loadingEl) {
-                    loadingEl.style.opacity = '0';
-                    setTimeout(() => { 
-                        loadingEl.style.display = 'none'; 
-                        showScrollHint(); 
-                    }, 800);
-                } else {
-                    showScrollHint();
-                }
-            }
-        }, 50);
+        const loadingEl = document.getElementById('loading');
+        if (loadingEl) {
+            loadingEl.style.opacity = '0';
+            setTimeout(() => { 
+                loadingEl.style.display = 'none'; 
+                showScrollHint(); 
+            }, 800);
+        } else {
+            showScrollHint();
+        }
     },
     (url, itemsLoaded, itemsTotal) => {
-        const realProgress = Math.round((itemsLoaded / itemsTotal) * 100);
-        if (realProgress > targetPercent) {
-            targetPercent = realProgress;
-        }
+        const percentEl = document.getElementById('loading-percent');
+        const progress = Math.round((itemsLoaded / itemsTotal) * 100);
+        if (percentEl) percentEl.innerText = progress + '%';
     },
     (url) => {
         console.error('Error loading file:', url);
         const percentEl = document.getElementById('loading-percent');
         if (percentEl) percentEl.innerText = 'Loading Error';
-        clearInterval(progressInterval);
     }
 );
 
@@ -195,7 +158,7 @@ const ARTWORK_CONFIG = [
     },
     {
         name: "Object003_eddie manuel bake_0",
-        image: './2.jpg',
+        image: '2.jpg',
         size: { width: 0.69, height: 0.55, dist: 0.005, offsetX: 0, offsetY: -0.02, degX: -1, degY: 7, degZ: 0 },
         override: { pos: [13.30, 1.60, 1.50], target: [13.75, 1.60, 2.00] }
     },
@@ -301,6 +264,7 @@ function normalizeName(str) {
 }
 
 const NORMALIZED_TARGETS = ARTWORK_CONFIG.map((a) => normalizeName(a.name));
+
 const ARTWORK_AZIMUTH_RANGE = THREE.MathUtils.degToRad(35);
 
 let artworks = [];
@@ -355,7 +319,7 @@ function applyCustomImage(art, url) {
                 return;
             }
 
-            texture.colorSpace = THREE.SRGBColorSpace;
+            texture.encoding = THREE.sRGBEncoding;
 
             if (art.imageMesh) {
                 scene.remove(art.imageMesh);
@@ -469,14 +433,9 @@ loader.load(
 
 function flyTo(viewpoint, onArrive) {
     isAnimating = true;
-    
-    // پاک کردن انیمیشن‌های قبلی برای جلوگیری از تداخل و گیر کردن
-    gsap.killTweensOf(camera.position);
-    gsap.killTweensOf(controls.target);
-
     gsap.to(camera.position, {
         x: viewpoint.pos[0], y: viewpoint.pos[1], z: viewpoint.pos[2],
-        duration: 2.2, ease: "power2.inOut",
+        duration: 2.8, ease: "power2.inOut",
         onComplete: () => {
             isAnimating = false;
             if (onArrive) onArrive();
@@ -484,7 +443,7 @@ function flyTo(viewpoint, onArrive) {
     });
     gsap.to(controls.target, {
         x: viewpoint.target[0], y: viewpoint.target[1], z: viewpoint.target[2],
-        duration: 2.2, ease: "power2.inOut",
+        duration: 2.0, ease: "power2.inOut",
         onUpdate: () => controls.update()
     });
 }
@@ -587,33 +546,34 @@ window.addEventListener('wheel', (e) => {
     wheelCooldown = true;
     setTimeout(() => {
         wheelCooldown = false;
-    }, 200);
+    }, 150);
     stepIndex(e.deltaY > 0 ? 1 : -1);
 }, { passive: false });
 
-const TOUCH_STEP_DISTANCE = 50;
+const TOUCH_STEP_DISTANCE = 60;
 let touchLastY = null;
 let touchAccum = 0;
 
 window.addEventListener('touchstart', (e) => {
-    if (e.touches.length > 0) {
-        touchLastY = e.touches[0].clientY;
-        touchAccum = 0;
-    }
+    touchLastY = e.touches[0].clientY;
+    touchAccum = 0;
 }, { passive: true });
 
 window.addEventListener('touchmove', (e) => {
-    if (touchLastY === null || e.touches.length === 0) return;
+    if (touchLastY === null) return;
     const currentY = e.touches[0].clientY;
     const delta = touchLastY - currentY;
     touchLastY = currentY;
     if (isAnimating) return;
-    
     touchAccum += delta;
-    if (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
+    while (Math.abs(touchAccum) >= TOUCH_STEP_DISTANCE) {
         const direction = touchAccum > 0 ? 1 : -1;
         stepIndex(direction);
-        touchAccum = 0;
+        touchAccum -= direction * TOUCH_STEP_DISTANCE;
+        if (isAnimating) {
+            touchAccum = 0;
+            break;
+        }
     }
 }, { passive: true });
 
