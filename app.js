@@ -310,7 +310,7 @@ function applyCustomImage(art, url) {
 
 const loader = new THREE.GLTFLoader(loadingManager);
 loader.load(
-    'room3-small.glb',
+    'room3-v1.glb',
     (gltf) => {
         const model = gltf.scene;
         scene.add(model);
