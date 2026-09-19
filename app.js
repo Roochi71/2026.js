@@ -50,7 +50,6 @@ function showScrollHint() {
     hint.id = 'scroll-hint-popup';
     
     const isMobile = window.innerWidth < 768;
-    // استفاده از آیکون متحرک بصورت SVG بدون متن فارسی
     const iconSvg = isMobile 
         ? `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceUp 1.5s infinite;"><path d="M18 11V6a2 2 0 0 0-4 0v5"></path><path d="M14 10V4a2 2 0 0 0-4 0v6"></path><path d="M10 10.5V6a2 2 0 0 0-4 0v8"></path><path d="M18 11a4 4 0 0 1 4 4v3a6 6 0 0 1-6 6h-2a8 8 0 0 1-5.35-2.02l-2.45-2.22a2 2 0 0 1-.16-2.68l2.16-2.73a2 2 0 0 1 2.82-.22l2.96 2.37"></path></svg>`
         : `<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="animation: bounceScroll 1.5s infinite;"><rect x="5" y="2" width="14" height="20" rx="7"></rect><line x1="12" y1="6" x2="12" y2="10"></line></svg>`;
@@ -88,7 +87,6 @@ function showScrollHint() {
     `;
     document.body.appendChild(hint);
 
-    // ظاهر شدن پس از ۱ ثانیه
     setTimeout(() => {
         const popup = hint.querySelector('div');
         if (popup) popup.style.opacity = '1';
@@ -110,28 +108,66 @@ function showScrollHint() {
     window.addEventListener('touchstart', dismissHint, { once: true });
 }
 
+// ---------------------------------------------------------------------------
+// لودر پیشرفته و روان (Smooth Progress Simulator)
+// ---------------------------------------------------------------------------
+let currentPercent = 0;
+let targetPercent = 0;
+let isLoaded = false;
+
+const progressInterval = setInterval(() => {
+    if (isLoaded) {
+        targetPercent = 100;
+    } else {
+        if (targetPercent < 95) {
+            targetPercent += Math.floor(Math.random() * 3) + 1;
+            if (targetPercent > 95) targetPercent = 95;
+        }
+    }
+
+    currentPercent += (targetPercent - currentPercent) * 0.1;
+    
+    const percentEl = document.getElementById('loading-percent');
+    if (percentEl) {
+        percentEl.innerText = Math.round(currentPercent) + '%';
+    }
+
+    if (isLoaded && Math.round(currentPercent) >= 100) {
+        clearInterval(progressInterval);
+    }
+}, 40);
+
 const loadingManager = new THREE.LoadingManager(
     () => {
-        const loadingEl = document.getElementById('loading');
-        if (loadingEl) {
-            loadingEl.style.opacity = '0';
-            setTimeout(() => { 
-                loadingEl.style.display = 'none'; 
-                showScrollHint(); 
-            }, 800);
-        } else {
-            showScrollHint();
-        }
+        isLoaded = true;
+        
+        const checkComplete = setInterval(() => {
+            if (Math.round(currentPercent) >= 100) {
+                clearInterval(checkComplete);
+                const loadingEl = document.getElementById('loading');
+                if (loadingEl) {
+                    loadingEl.style.opacity = '0';
+                    setTimeout(() => { 
+                        loadingEl.style.display = 'none'; 
+                        showScrollHint(); 
+                    }, 800);
+                } else {
+                    showScrollHint();
+                }
+            }
+        }, 50);
     },
     (url, itemsLoaded, itemsTotal) => {
-        const percentEl = document.getElementById('loading-percent');
-        const progress = Math.round((itemsLoaded / itemsTotal) * 100);
-        if (percentEl) percentEl.innerText = progress + '%';
+        const realProgress = Math.round((itemsLoaded / itemsTotal) * 100);
+        if (realProgress > targetPercent) {
+            targetPercent = realProgress;
+        }
     },
     (url) => {
         console.error('Error loading file:', url);
         const percentEl = document.getElementById('loading-percent');
         if (percentEl) percentEl.innerText = 'Loading Error';
+        clearInterval(progressInterval);
     }
 );
 
